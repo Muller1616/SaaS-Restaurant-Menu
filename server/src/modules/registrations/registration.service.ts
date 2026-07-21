@@ -121,7 +121,7 @@ export async function createRegistration(
       priceMonthly: tenant.selectedPlan.priceMonthly.toString(),
     },
     message:
-      "Registration submitted successfully. You will receive an email once reviewed.",
+      "Thanks — we received your application. We’ll email you once it’s been reviewed.",
   };
 }
 

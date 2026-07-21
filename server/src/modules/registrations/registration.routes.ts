@@ -122,7 +122,7 @@ publicRouter.post(
     try {
       const parsed = registrationSchema.safeParse(req.body);
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
 
       const result = await createRegistration(
