@@ -1,9 +1,15 @@
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import {
+  Navigate,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import axios from "axios";
 import { useAdminAuth } from "../../features/admin/AdminAuthContext";
+import { SESSION_IDLE_MESSAGE } from "../../lib/session-timeout-config";
 
 const loginSchema = z.object({
   email: z.email("Enter a valid email"),
@@ -17,6 +23,8 @@ export function AdminLoginPage() {
   const { login, isAuthenticated } = useAdminAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const idleExpired = searchParams.get("reason") === "idle";
   const from =
     (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ??
     "/admin";
@@ -72,6 +80,15 @@ export function AdminLoginPage() {
         <p className="mt-2 text-sm text-[var(--muted)]">
           Approve tenants, payments, and subscriptions.
         </p>
+
+        {idleExpired && (
+          <div
+            role="status"
+            className="mt-5 rounded-2xl border border-[var(--gold)]/25 bg-[rgba(212,165,116,0.12)] px-4 py-3 text-sm text-[var(--gold-soft)]"
+          >
+            {SESSION_IDLE_MESSAGE}
+          </div>
+        )}
 
         <form className="mt-8 space-y-4" onSubmit={handleSubmit(onSubmit)}>
           <div>
