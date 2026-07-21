@@ -23,7 +23,10 @@
   }
 
   html {
-    scroll-behavior: smooth;
+    /* Instant scroll for route changes; avoids animated “vibration” on navigate */
+    scroll-behavior: auto;
+    overflow-anchor: none;
+    scrollbar-gutter: stable;
   }
 
   body {
@@ -33,6 +36,7 @@
     color: var(--mist);
     background: var(--night);
     -webkit-font-smoothing: antialiased;
+    overflow-anchor: none;
   }
 
   h1,
@@ -149,6 +153,42 @@
   animation: fade-up 0.7s ease both;
 }
 
+/* Named region for View Transitions — keeps sidebar/header visually stable */
+.app-page {
+  view-transition-name: app-page;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-group(app-page) {
+  animation-duration: 160ms;
+  animation-timing-function: ease-out;
+}
+
+::view-transition-old(app-page) {
+  animation: app-page-out 140ms ease-out both;
+}
+
+::view-transition-new(app-page) {
+  animation: app-page-in 160ms ease-out both;
+}
+
+@keyframes app-page-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes app-page-in {
+  from {
+    opacity: 0;
+  }
+}
+
 .gold-gradient-text {
   background: linear-gradient(120deg, #f3d7b0, #d4a574 45%, #f7e7cf);
   background-size: 200% 200%;
@@ -170,5 +210,14 @@
     transition: none !important;
     opacity: 1 !important;
     transform: none !important;
+  }
+
+  .app-page {
+    view-transition-name: none;
+  }
+
+  ::view-transition-old(app-page),
+  ::view-transition-new(app-page) {
+    animation: none !important;
   }
 }

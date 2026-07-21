@@ -10,6 +10,7 @@ import { AdminAuthProvider } from "./features/admin/AdminAuthContext";
 import { AdminLayout } from "./features/admin/AdminLayout";
 import { RequireAdminAuth } from "./features/admin/RequireAdminAuth";
 import { NavigationHistoryProvider } from "./features/navigation/NavigationHistoryContext";
+import { RouteTransitionOutlet } from "./features/navigation/PageTransition";
 import { RequireTenantAuth } from "./features/tenant/RequireTenantAuth";
 import { TenantAuthProvider } from "./features/tenant/TenantAuthContext";
 import { TenantLayout } from "./features/tenant/TenantLayout";
@@ -68,35 +69,39 @@ export default function App() {
           <AdminAuthProvider>
             <TenantAuthProvider>
               <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/register" element={<RegisterPage />} />
-                <Route path="/r/:tenantSlug" element={<PublicMenuPage />} />
-                <Route
-                  path="/r/:tenantSlug/:branchSlug"
-                  element={<PublicMenuPage />}
-                />
-                {/* FR-5.1 alias → canonical FR-10.1 /r/... */}
-                <Route path="/menu/:tenantSlug" element={<MenuPathAlias />} />
-                <Route
-                  path="/menu/:tenantSlug/:branchSlug"
-                  element={<MenuPathAlias />}
-                />
-
-                <Route path="/tenant/login" element={<TenantLoginPage />} />
-                <Route
-                  path="/tenant/forgot-password"
-                  element={<TenantForgotPasswordPage />}
-                />
-                <Route
-                  path="/tenant/reset-password"
-                  element={<TenantResetPasswordPage />}
-                />
+                {/* Standalone pages — stable content frame (no remount fade) */}
+                <Route element={<RouteTransitionOutlet />}>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/register" element={<RegisterPage />} />
+                  <Route path="/r/:tenantSlug" element={<PublicMenuPage />} />
+                  <Route
+                    path="/r/:tenantSlug/:branchSlug"
+                    element={<PublicMenuPage />}
+                  />
+                  <Route path="/menu/:tenantSlug" element={<MenuPathAlias />} />
+                  <Route
+                    path="/menu/:tenantSlug/:branchSlug"
+                    element={<MenuPathAlias />}
+                  />
+                  <Route path="/tenant/login" element={<TenantLoginPage />} />
+                  <Route
+                    path="/tenant/forgot-password"
+                    element={<TenantForgotPasswordPage />}
+                  />
+                  <Route
+                    path="/tenant/reset-password"
+                    element={<TenantResetPasswordPage />}
+                  />
+                  <Route path="/admin/login" element={<AdminLoginPage />} />
+                </Route>
 
                 <Route path="/tenant" element={<RequireTenantAuth />}>
-                  <Route
-                    path="change-password"
-                    element={<TenantChangePasswordPage />}
-                  />
+                  <Route element={<RouteTransitionOutlet />}>
+                    <Route
+                      path="change-password"
+                      element={<TenantChangePasswordPage />}
+                    />
+                  </Route>
                   <Route element={<TenantLayout />}>
                     <Route index element={<TenantDashboardPage />} />
                     <Route path="branches" element={<TenantBranchesPage />} />
@@ -115,8 +120,6 @@ export default function App() {
                     <Route path="settings" element={<TenantSettingsPage />} />
                   </Route>
                 </Route>
-
-                <Route path="/admin/login" element={<AdminLoginPage />} />
 
                 <Route path="/admin" element={<RequireAdminAuth />}>
                   <Route element={<AdminLayout />}>

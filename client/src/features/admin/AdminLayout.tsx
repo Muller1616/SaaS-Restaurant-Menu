@@ -1,4 +1,6 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
+import { AppNavLink } from "../navigation/AppNavLink";
+import { PageTransition } from "../navigation/PageTransition";
 import { useAdminAuth } from "./AdminAuthContext";
 
 const navItems = [
@@ -24,7 +26,7 @@ export function AdminLayout() {
   }
 
   return (
-    <div className="relative h-svh overflow-hidden bg-[var(--night)] text-[var(--mist)]">
+    <div className="relative h-dvh overflow-hidden bg-[var(--night)] text-[var(--mist)]">
       <div
         className="pointer-events-none fixed inset-0 opacity-50"
         style={{
@@ -34,7 +36,6 @@ export function AdminLayout() {
       />
 
       <div className="relative flex h-full min-h-0">
-        {/* Desktop sidebar — fixed in the flex shell; does not scroll with content */}
         <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-[var(--line)] bg-[rgba(18,26,23,0.92)] backdrop-blur-xl lg:flex">
           <div className="shrink-0 border-b border-[var(--line)] px-6 py-5">
             <p className="text-[11px] tracking-[0.3em] text-[var(--gold)] uppercase">
@@ -46,13 +47,13 @@ export function AdminLayout() {
           </div>
           <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain p-3">
             {navItems.map((item) => (
-              <NavLink
+              <AppNavLink
                 key={item.to}
                 to={item.to}
                 end={"end" in item ? item.end : false}
                 className={({ isActive }) =>
                   [
-                    "rounded-xl px-3 py-2.5 text-sm transition",
+                    "rounded-xl px-3 py-2.5 text-sm transition-colors",
                     isActive
                       ? "bg-[var(--gold)] font-semibold text-[var(--night)]"
                       : "text-white/70 hover:bg-white/6 hover:text-white",
@@ -60,7 +61,7 @@ export function AdminLayout() {
                 }
               >
                 {item.label}
-              </NavLink>
+              </AppNavLink>
             ))}
           </nav>
           <div className="shrink-0 border-t border-[var(--line)] p-4 text-sm">
@@ -79,7 +80,6 @@ export function AdminLayout() {
           </div>
         </aside>
 
-        {/* Main column — header/nav pinned; only <main> scrolls */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <header className="flex shrink-0 items-center justify-between border-b border-[var(--line)] bg-[rgba(18,26,23,0.75)] px-4 py-3 backdrop-blur-xl lg:px-8">
             <div>
@@ -101,13 +101,13 @@ export function AdminLayout() {
 
           <nav className="flex shrink-0 gap-2 overflow-x-auto overscroll-contain border-b border-[var(--line)] bg-[rgba(18,26,23,0.55)] px-4 py-2 lg:hidden">
             {navItems.map((item) => (
-              <NavLink
+              <AppNavLink
                 key={item.to}
                 to={item.to}
                 end={"end" in item ? item.end : false}
                 className={({ isActive }) =>
                   [
-                    "whitespace-nowrap rounded-full px-3 py-1.5 text-sm",
+                    "whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors",
                     isActive
                       ? "bg-[var(--gold)] font-semibold text-[var(--night)]"
                       : "border border-white/10 text-white/75",
@@ -115,15 +115,17 @@ export function AdminLayout() {
                 }
               >
                 {item.label}
-              </NavLink>
+              </AppNavLink>
             ))}
           </nav>
 
           <main
             data-scroll-root
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 lg:px-8"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 lg:px-8 [overflow-anchor:none]"
           >
-            <Outlet />
+            <PageTransition>
+              <Outlet />
+            </PageTransition>
           </main>
         </div>
       </div>
