@@ -26,8 +26,8 @@ Optional Mailhog / SMTP: set `SMTP_*` in `server/.env` (see `.env.example`).
 
 | Role | Email | Password |
 |---|---|---|
-| Super admin | `admin@kitchenos.local` | `Admin@12345` |
-| Staff admin | `staff@kitchenos.local` | `Staff@12345` |
+| Super admin | `admin@kitchenos.local` | `password` |
+| Staff admin | `staff@kitchenos.local` | `password` |
 | Tenant | From registration approval | Temp password in admin modal + email |
 
 ## What is included
