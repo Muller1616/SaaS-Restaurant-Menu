@@ -146,7 +146,10 @@ export async function getBranchAnalytics(input: {
         branchId: branch.id,
         viewedAt: { gte: windowStart },
       },
-      select: { viewedAt: true },
+      select: {
+        viewedAt: true,
+        ...(tier === "full" ? { userAgent: true } : {}),
+      },
       orderBy: { viewedAt: "asc" },
     }),
     prisma.menuView.count({ where: { branchId: branch.id } }),
@@ -169,12 +172,23 @@ export async function getBranchAnalytics(input: {
         ) / 10;
 
   let byHour: Array<{ hour: number; views: number }> | null = null;
+  let devices: Array<{ device: string; views: number }> | null = null;
+
   if (tier === "full") {
     const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, views: 0 }));
+    const deviceCounts = new Map<string, number>();
+
     for (const row of windowRows) {
       hours[row.viewedAt.getUTCHours()]!.views += 1;
+      const device = classifyUserAgent(
+        "userAgent" in row ? (row.userAgent as string | null) : null,
+      );
+      deviceCounts.set(device, (deviceCounts.get(device) ?? 0) + 1);
     }
     byHour = hours;
+    devices = ["Mobile", "Desktop", "Tablet", "Unknown"]
+      .map((device) => ({ device, views: deviceCounts.get(device) ?? 0 }))
+      .filter((row) => row.views > 0);
   }
 
   return {
@@ -191,5 +205,14 @@ export async function getBranchAnalytics(input: {
     peakDay: peak,
     daily,
     byHour,
+    devices,
   };
+}
+
+function classifyUserAgent(userAgent: string | null) {
+  if (!userAgent) return "Unknown";
+  const ua = userAgent.toLowerCase();
+  if (/ipad|tablet/.test(ua)) return "Tablet";
+  if (/mobi|android|iphone|ipod/.test(ua)) return "Mobile";
+  return "Desktop";
 }

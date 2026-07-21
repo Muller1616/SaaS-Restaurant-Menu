@@ -1,10 +1,15 @@
 import { Router } from "express";
+import { prisma } from "../../lib/prisma.js";
 import {
   requireAuth,
   requireTenant,
   type AuthedRequest,
 } from "../../middleware/auth.js";
 import { getTenantProfile } from "../auth/auth.service.js";
+import {
+  getBranchAnalytics,
+  resolveAnalyticsTier,
+} from "../analytics/analytics.service.js";
 
 export const tenantRouter = Router();
 
@@ -20,6 +25,38 @@ tenantRouter.get("/dashboard", async (req: AuthedRequest, res, next) => {
       tenant.branches[0] ??
       null;
 
+    const menuItems = currentBranch
+      ? await prisma.menuItem.count({
+          where: {
+            branchId: currentBranch.id,
+            deletedAt: null,
+          },
+        })
+      : 0;
+
+    const analyticsTier = resolveAnalyticsTier(tenant.selectedPlan.features);
+    let viewSnapshot: {
+      today: number;
+      last7Days: number;
+      daily: Array<{ date: string; views: number }>;
+    } | null = null;
+
+    if (currentBranch && analyticsTier !== "none") {
+      try {
+        const analytics = await getBranchAnalytics({
+          tenantId: tenant.id,
+          branchId: currentBranch.id,
+        });
+        viewSnapshot = {
+          today: analytics.totals.today,
+          last7Days: analytics.totals.last7Days,
+          daily: analytics.daily.slice(-7),
+        };
+      } catch {
+        viewSnapshot = null;
+      }
+    }
+
     res.json({
       success: true,
       data: {
@@ -31,10 +68,13 @@ tenantRouter.get("/dashboard", async (req: AuthedRequest, res, next) => {
         currentBranch,
         stats: {
           branches: tenant.branches.length,
-          menuItems: null,
+          menuItems,
           subscriptionStatus: currentBranch?.subscription?.status ?? null,
-          planName: currentBranch?.subscription?.plan.name ?? tenant.selectedPlan.name,
+          planName:
+            currentBranch?.subscription?.plan.name ?? tenant.selectedPlan.name,
         },
+        viewSnapshot,
+        analyticsTier,
       },
     });
   } catch (error) {
