@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import { api, type ApiSuccess } from "../../lib/api";
+import { AppNavLink } from "../navigation/AppNavLink";
+import { PageTransition } from "../navigation/PageTransition";
 import { TenantSubscriptionBanner } from "./TenantSubscriptionBanner";
 import { useTenantAuth } from "./TenantAuthContext";
 
@@ -57,7 +59,7 @@ export function TenantLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--night)] text-[var(--mist)]">
+    <div className="min-h-dvh overflow-x-hidden bg-[var(--night)] text-[var(--mist)]">
       <div
         className="pointer-events-none fixed inset-0 opacity-50"
         style={{
@@ -72,7 +74,7 @@ export function TenantLayout() {
             <p className="text-[11px] tracking-[0.3em] text-[var(--gold)] uppercase">
               KitchenOS
             </p>
-            <h1 className="font-[family-name:var(--font-display)] text-2xl text-white sm:text-3xl">
+            <h1 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-white sm:text-3xl">
               {tenant?.businessName}
             </h1>
           </div>
@@ -117,13 +119,13 @@ export function TenantLayout() {
 
         <nav className="mb-6 flex gap-2 overflow-x-auto pb-1">
           {navItems.map((item) => (
-            <NavLink
+            <AppNavLink
               key={item.to}
               to={item.to}
               end={"end" in item ? item.end : false}
               className={({ isActive }) =>
                 [
-                  "relative whitespace-nowrap rounded-full px-4 py-2 text-sm transition",
+                  "relative whitespace-nowrap rounded-full px-4 py-2 text-sm transition-colors",
                   isActive
                     ? "bg-[var(--gold)] font-semibold text-[var(--night)]"
                     : "border border-white/10 text-white/75 hover:border-[var(--gold)]/50 hover:text-white",
@@ -147,14 +149,16 @@ export function TenantLayout() {
                   )}
                 </span>
               )}
-            </NavLink>
+            </AppNavLink>
           ))}
         </nav>
 
         <TenantSubscriptionBanner />
 
-        <main>
-          <Outlet />
+        <main className="[overflow-anchor:none]">
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
         </main>
       </div>
     </div>

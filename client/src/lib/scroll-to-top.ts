@@ -2,30 +2,37 @@
 export const SCROLL_ROOT_ATTR = "data-scroll-root";
 
 /**
+ * Disable the browser's automatic scroll restoration so the app
+ * controls scroll position on every navigation (including Back).
+ */
+export function disableBrowserScrollRestoration() {
+  if (typeof window === "undefined") return;
+  if ("scrollRestoration" in window.history) {
+    window.history.scrollRestoration = "manual";
+  }
+}
+
+/**
  * Instantly reset window + app scroll roots to the top.
- * Uses instant positioning (no smooth animation) to avoid flicker after back nav.
+ * Call once from useLayoutEffect (before paint) — never animate.
  */
 export function scrollAppToTop() {
   const html = document.documentElement;
   const body = document.body;
-  const prevHtml = html.style.scrollBehavior;
-  const prevBody = body.style.scrollBehavior;
 
   html.style.scrollBehavior = "auto";
   body.style.scrollBehavior = "auto";
 
-  window.scrollTo(0, 0);
-  html.scrollTop = 0;
-  body.scrollTop = 0;
+  if (window.scrollX !== 0 || window.scrollY !== 0) {
+    window.scrollTo(0, 0);
+  }
+  if (html.scrollTop !== 0) html.scrollTop = 0;
+  if (body.scrollTop !== 0) body.scrollTop = 0;
 
   document.querySelectorAll<HTMLElement>(`[${SCROLL_ROOT_ATTR}]`).forEach((el) => {
-    const prev = el.style.scrollBehavior;
-    el.style.scrollBehavior = "auto";
-    el.scrollTop = 0;
-    el.scrollLeft = 0;
-    el.style.scrollBehavior = prev;
+    if (el.scrollTop !== 0 || el.scrollLeft !== 0) {
+      el.scrollTop = 0;
+      el.scrollLeft = 0;
+    }
   });
-
-  html.style.scrollBehavior = prevHtml;
-  body.style.scrollBehavior = prevBody;
 }
