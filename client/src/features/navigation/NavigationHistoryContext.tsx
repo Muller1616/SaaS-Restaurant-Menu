@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MutableRefObject,
   type ReactNode,
 } from "react";
 import {
@@ -13,18 +14,20 @@ import {
   useNavigate,
   useNavigationType,
 } from "react-router-dom";
-import { scrollAppToTop } from "../../lib/scroll-to-top";
+import {
+  disableBrowserScrollRestoration,
+  scrollAppToTop,
+} from "../../lib/scroll-to-top";
+import { runViewTransition } from "./run-view-transition";
 
 type NavigationHistoryApi = {
   canGoBack: boolean;
   goBack: (
     fallbackTo: string,
     options?: {
-      /** When previous entry matches, use fallback instead of history back. */
       skipPrevious?: (previousKey: string) => boolean;
     },
   ) => void;
-  /** Mark the next route change to open at scroll top (used by BackButton). */
   requestScrollToTop: () => void;
 };
 
@@ -36,69 +39,33 @@ function locationKey(pathname: string, search: string) {
   return `${pathname}${search}`;
 }
 
+type StackApi = {
+  stackRef: MutableRefObject<string[]>;
+  setCanGoBack: (value: boolean) => void;
+};
+
+const StackApiContext = createContext<StackApi | null>(null);
+
 /**
- * Tracks in-app route history so BackButton can prefer the previous page
- * without relying on browser-specific history heuristics.
+ * Owns back-stack + scroll policy without re-rendering the whole app tree
+ * on every route change. Route effects live in a sibling that returns null.
  */
 export function NavigationHistoryProvider({
   children,
 }: {
   children: ReactNode;
 }) {
-  const location = useLocation();
   const navigate = useNavigate();
-  const navigationType = useNavigationType();
   const stackRef = useRef<string[]>([]);
-  const pendingScrollTopRef = useRef(false);
-  const [stackSize, setStackSize] = useState(0);
+  const [canGoBack, setCanGoBack] = useState(false);
 
-  useLayoutEffect(() => {
-    const key = locationKey(location.pathname, location.search);
-    const stack = stackRef.current;
-    const last = stack[stack.length - 1];
-    if (last === key) return;
-
-    let next: string[];
-    if (navigationType === "REPLACE") {
-      next = stack.length === 0 ? [key] : [...stack.slice(0, -1), key];
-    } else {
-      const existing = stack.lastIndexOf(key);
-      if (existing !== -1) {
-        // POP / revisit — trim forward history
-        next = stack.slice(0, existing + 1);
-      } else {
-        const pushed = [...stack, key];
-        next = pushed.length > 40 ? pushed.slice(pushed.length - 40) : pushed;
-      }
-    }
-
-    stackRef.current = next;
-    setStackSize(next.length);
-  }, [location.pathname, location.search, navigationType]);
-
-  // After Back Arrow navigation, pin the destination at the top before paint
-  // and again shortly after to beat browser scroll restoration on POP.
-  useLayoutEffect(() => {
-    if (!pendingScrollTopRef.current) return;
-
-    scrollAppToTop();
-
-    const frame = window.requestAnimationFrame(() => {
-      scrollAppToTop();
-      pendingScrollTopRef.current = false;
-    });
-    const timeout = window.setTimeout(() => {
-      scrollAppToTop();
-    }, 0);
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.clearTimeout(timeout);
-    };
-  }, [location.pathname, location.search]);
+  const stackApi = useMemo<StackApi>(
+    () => ({ stackRef, setCanGoBack }),
+    [],
+  );
 
   const requestScrollToTop = useCallback(() => {
-    pendingScrollTopRef.current = true;
+    scrollAppToTop();
   }, []);
 
   const goBack = useCallback(
@@ -108,36 +75,93 @@ export function NavigationHistoryProvider({
         skipPrevious?: (previousKey: string) => boolean;
       },
     ) => {
-      pendingScrollTopRef.current = true;
-      if (stackRef.current.length > 1) {
-        const previous = stackRef.current[stackRef.current.length - 2] ?? "";
-        if (options?.skipPrevious?.(previous)) {
-          navigate(fallbackTo, { replace: true });
+      const perform = () => {
+        if (stackRef.current.length > 1) {
+          const previous = stackRef.current[stackRef.current.length - 2] ?? "";
+          if (options?.skipPrevious?.(previous)) {
+            navigate(fallbackTo, { replace: true });
+            return;
+          }
+          navigate(-1);
           return;
         }
-        navigate(-1);
-        return;
-      }
-      // Replace so returning here cannot create a back/forward loop
-      navigate(fallbackTo, { replace: true });
+        navigate(fallbackTo, { replace: true });
+      };
+      runViewTransition(perform);
     },
     [navigate],
   );
 
   const api = useMemo<NavigationHistoryApi>(
     () => ({
-      canGoBack: stackSize > 1,
+      canGoBack,
       goBack,
       requestScrollToTop,
     }),
-    [goBack, requestScrollToTop, stackSize],
+    [canGoBack, goBack, requestScrollToTop],
   );
 
   return (
-    <NavigationHistoryContext.Provider value={api}>
-      {children}
-    </NavigationHistoryContext.Provider>
+    <StackApiContext.Provider value={stackApi}>
+      <NavigationHistoryContext.Provider value={api}>
+        <RouteNavigationEffects />
+        {children}
+      </NavigationHistoryContext.Provider>
+    </StackApiContext.Provider>
   );
+}
+
+/**
+ * Subscribes to location. Re-renders alone (returns null) so auth providers
+ * and route shells are not forced to update on every navigation.
+ */
+function RouteNavigationEffects() {
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  const stackApi = useContext(StackApiContext);
+  const lastScrollKeyRef = useRef<string | null>(null);
+  const restorationReady = useRef(false);
+
+  useLayoutEffect(() => {
+    if (!restorationReady.current) {
+      disableBrowserScrollRestoration();
+      restorationReady.current = true;
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!stackApi) return;
+
+    const key = locationKey(location.pathname, location.search);
+    const stack = stackApi.stackRef.current;
+    const last = stack[stack.length - 1];
+
+    if (last !== key) {
+      let next: string[];
+      if (navigationType === "REPLACE") {
+        next = stack.length === 0 ? [key] : [...stack.slice(0, -1), key];
+      } else {
+        const existing = stack.lastIndexOf(key);
+        if (existing !== -1) {
+          next = stack.slice(0, existing + 1);
+        } else {
+          const pushed = [...stack, key];
+          next = pushed.length > 40 ? pushed.slice(pushed.length - 40) : pushed;
+        }
+      }
+      stackApi.stackRef.current = next;
+      const nextCanGoBack = next.length > 1;
+      stackApi.setCanGoBack(nextCanGoBack);
+    }
+
+    // Single pre-paint scroll reset. No rAF/timeout loops (those cause vibration).
+    if (lastScrollKeyRef.current !== key) {
+      lastScrollKeyRef.current = key;
+      scrollAppToTop();
+    }
+  }, [location.pathname, location.search, navigationType, stackApi]);
+
+  return null;
 }
 
 export function useNavigationHistory() {
