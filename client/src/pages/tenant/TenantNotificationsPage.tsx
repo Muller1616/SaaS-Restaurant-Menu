@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, type ApiSuccess } from "../../lib/api";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
-import { BackButton } from "../../components/BackButton";
 
 type Notification = {
   id: string;
@@ -56,7 +55,6 @@ export function TenantNotificationsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <BackButton fallbackTo="/tenant" className="mb-3" />
           <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
             Inbox
           </p>

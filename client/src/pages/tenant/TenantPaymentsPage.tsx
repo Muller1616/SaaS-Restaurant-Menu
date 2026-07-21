@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
 import { formatEtb } from "../../lib/plans";
-import { BackButton } from "../../components/BackButton";
 
 type PaymentRow = {
   id: string;
@@ -34,7 +33,6 @@ export function TenantPaymentsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <BackButton fallbackTo="/tenant" className="mb-3" />
           <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
             Ledger
           </p>
