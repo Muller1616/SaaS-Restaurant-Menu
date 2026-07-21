@@ -9,6 +9,7 @@ import { PublicNav } from "../components/PublicNav";
 import { api, type ApiSuccess } from "../lib/api";
 import { validateDeviceImage } from "../lib/device-image";
 import { formatEtb, type Plan } from "../lib/plans";
+import { BackButton } from "../components/BackButton";
 
 const registrationSchema = z
   .object({
@@ -175,6 +176,7 @@ export function RegisterPage() {
 
       <main className="relative mx-auto grid max-w-6xl gap-10 px-6 pt-32 pb-20 lg:grid-cols-[0.9fr_1.1fr]">
         <aside className="animate-rise lg:sticky lg:top-28 lg:self-start">
+          <BackButton fallbackTo="/" className="mb-3" />
           <p className="text-xs tracking-[0.35em] text-[var(--gold)] uppercase">
             Join KitchenOS
           </p>
