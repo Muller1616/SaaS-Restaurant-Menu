@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useNavigationHistory } from "../features/navigation/NavigationHistoryContext";
+import { scrollAppToTop } from "../lib/scroll-to-top";
 
 type BackButtonProps = {
   /** Route used when there is no in-app history to go back to. */
@@ -15,6 +16,7 @@ type BackButtonProps = {
 
 /**
  * Consistent back control: prefers in-app router history, otherwise `fallbackTo`.
+ * Always opens the destination at the top of the page.
  */
 export function BackButton({
   fallbackTo,
@@ -28,14 +30,20 @@ export function BackButton({
 
   function handleClick() {
     if (onBack) {
+      history?.requestScrollToTop();
       onBack();
+      // If onBack navigates synchronously, layout effect handles scroll;
+      // also scroll on next frame for same-route / delayed navigations.
+      window.requestAnimationFrame(() => scrollAppToTop());
       return;
     }
     if (history) {
       history.goBack(fallbackTo);
       return;
     }
+    scrollAppToTop();
     navigate(fallbackTo);
+    window.requestAnimationFrame(() => scrollAppToTop());
   }
 
   return (
