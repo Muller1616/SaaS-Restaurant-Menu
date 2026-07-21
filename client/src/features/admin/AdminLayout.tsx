@@ -3,9 +3,9 @@ import { useAdminAuth } from "./AdminAuthContext";
 
 const navItems = [
   { to: "/admin", label: "Dashboard", end: true },
-  { to: "/admin/tenants", label: "Tenants" },
+  { to: "/admin/tenants", label: "Restaurants" },
   { to: "/admin/branches", label: "Branches" },
-  { to: "/admin/approvals", label: "Approvals" },
+  { to: "/admin/approvals", label: "Applications" },
   { to: "/admin/subscriptions", label: "Subscriptions" },
   { to: "/admin/payments", label: "Payments" },
   { to: "/admin/plans", label: "Plans" },

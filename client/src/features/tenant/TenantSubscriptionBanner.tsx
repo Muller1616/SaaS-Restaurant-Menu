@@ -23,6 +23,12 @@ async function fetchSubscription() {
   return data.data;
 }
 
+function daysPhrase(days: number | null) {
+  if (days == null) return "a few days";
+  if (days === 1) return "1 day";
+  return `${days} days`;
+}
+
 export function TenantSubscriptionBanner() {
   const { currentBranchId } = useTenantAuth();
 
@@ -49,8 +55,8 @@ export function TenantSubscriptionBanner() {
   if (status === "TRIAL") {
     return (
       <div className="mb-6 rounded-2xl border border-[var(--gold)]/45 bg-[rgba(212,165,116,0.12)] px-4 py-3 text-sm text-[var(--gold-soft)]">
-        {sub.branch.name}: 14-day trial — {sub.daysRemaining ?? "a few"} day(s)
-        remaining. Full access while the trial is active.
+        {sub.branch.name}: your free trial has {daysPhrase(sub.daysRemaining)}{" "}
+        left. Enjoy full access while it lasts.
       </div>
     );
   }
@@ -58,9 +64,8 @@ export function TenantSubscriptionBanner() {
   if (status === "NEARLY_EXPIRED") {
     return (
       <div className="mb-6 rounded-2xl border border-[var(--gold)]/45 bg-[rgba(212,165,116,0.12)] px-4 py-3 text-sm text-[var(--gold-soft)]">
-        {sub.branch.name}:{" "}
-        {sub.isTrial ? "trial" : "subscription"} expires in{" "}
-        {sub.daysRemaining ?? "a few"} day(s). {sub.isTrial ? null : renewCta}
+        {sub.branch.name}: your {sub.isTrial ? "trial" : "plan"} ends in{" "}
+        {daysPhrase(sub.daysRemaining)}. {sub.isTrial ? null : renewCta}
       </div>
     );
   }
@@ -68,7 +73,8 @@ export function TenantSubscriptionBanner() {
   if (status === "GRACE_PERIOD") {
     return (
       <div className="mb-6 rounded-2xl border border-[var(--danger)]/40 bg-[rgba(255,107,107,0.1)] px-4 py-3 text-sm text-[var(--danger)]">
-        {sub.branch.name}: grace period active — editing is locked. {renewCta}
+        {sub.branch.name}: your plan has expired and editing is paused.{" "}
+        {renewCta}
       </div>
     );
   }
@@ -76,7 +82,7 @@ export function TenantSubscriptionBanner() {
   if (status === "EXPIRED") {
     return (
       <div className="mb-6 rounded-2xl border border-[var(--danger)]/40 bg-[rgba(255,107,107,0.12)] px-4 py-3 text-sm text-[var(--danger)]">
-        {sub.branch.name}: subscription expired. Public menu is unavailable.{" "}
+        {sub.branch.name}: your plan has expired, so the public menu is offline.{" "}
         {renewCta}
       </div>
     );
@@ -85,12 +91,12 @@ export function TenantSubscriptionBanner() {
   if (status === "CANCELLED") {
     return (
       <div className="mb-6 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm text-[var(--muted)]">
-        {sub.branch.name}: subscription cancelled.{" "}
+        {sub.branch.name}: this plan was cancelled.{" "}
         {sub.retentionPurgedAt
-          ? "Menu data for this branch has been removed after the retention window."
+          ? "Menu data for this location has been removed."
           : sub.retainUntil
-            ? `Data retained until ${new Date(sub.retainUntil).toLocaleDateString()} (${sub.retentionDaysLeft ?? 0} day(s) left).`
-            : "Data retained for 30 days."}{" "}
+            ? `We’ll keep your data until ${new Date(sub.retainUntil).toLocaleDateString()} (${daysPhrase(sub.retentionDaysLeft)} left).`
+            : "We’ll keep your data for 30 days."}{" "}
         {renewCta}
       </div>
     );
@@ -99,8 +105,8 @@ export function TenantSubscriptionBanner() {
   if (status === "SUSPENDED") {
     return (
       <div className="mb-6 rounded-2xl border border-[var(--danger)]/40 bg-[rgba(255,107,107,0.12)] px-4 py-3 text-sm text-[var(--danger)]">
-        {sub.branch.name}: subscription suspended by admin. Contact support if
-        this looks wrong.
+        {sub.branch.name}: this plan is suspended. Please contact KitchenOS
+        support if you need help.
       </div>
     );
   }
