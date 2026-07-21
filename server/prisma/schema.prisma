@@ -1,0 +1,372 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  GRACE_PERIOD
+  EXPIRED
+  SUSPENDED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  TELEBIRR
+  CASH
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+}
+
+enum NotificationType {
+  SYSTEM
+  PAYMENT
+  SUBSCRIPTION
+}
+
+enum ActivityUserType {
+  TENANT
+  ADMIN
+}
+
+enum ActivityAction {
+  LOGIN
+  LOGOUT
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  SUSPEND
+  ACTIVATE
+  EXTEND
+  CANCEL
+}
+
+enum SubscriptionAlertKind {
+  NEAR_EXPIRY_7
+  NEAR_EXPIRY_3
+  NEAR_EXPIRY_1
+  EXPIRED
+}
+
+enum SubscriptionEventKind {
+  CREATED
+  EXTENDED
+  PAYMENT_APPROVED
+  STATUS_CHANGED
+  CANCELLED
+  RENEWAL_SUBMITTED
+  RETENTION_PURGED
+}
+
+model Plan {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  slug         String   @unique
+  priceMonthly Decimal  @map("price_monthly") @db.Decimal(12, 2)
+  maxBranches  Int      @map("max_branches")
+  maxItems     Int?     @map("max_items")
+  features     Json
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenants       Tenant[]
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         AdminRole @default(ADMIN)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  approvedPayments Payment[] @relation("PaymentApprovedBy")
+
+  @@map("admin_users")
+}
+
+model Tenant {
+  id                        String       @id @default(cuid())
+  fullName                  String       @map("full_name")
+  email                     String       @unique
+  phone                     String
+  passwordHash              String?      @map("password_hash")
+  businessName              String       @map("business_name")
+  businessLocation          String       @map("business_location")
+  businessDescription       String?      @map("business_description")
+  slug                      String       @unique
+  logoUrl                   String?      @map("logo_url")
+  status                    TenantStatus @default(PENDING_APPROVAL)
+  selectedPlanId            String       @map("selected_plan_id")
+  registrationPaymentUrl    String?      @map("registration_payment_url")
+  rejectedReason            String?      @map("rejected_reason")
+  suspendedReason           String?      @map("suspended_reason")
+  emailNotificationsEnabled Boolean      @default(true) @map("email_notifications_enabled")
+  mustChangePassword        Boolean      @default(false) @map("must_change_password")
+  createdAt                 DateTime     @default(now()) @map("created_at")
+  updatedAt                 DateTime     @updatedAt @map("updated_at")
+
+  selectedPlan      Plan                 @relation(fields: [selectedPlanId], references: [id])
+  branches          Branch[]
+  payments          Payment[]
+  notifications     Notification[]
+  passwordResets    PasswordResetToken[]
+  menuViews         MenuView[]
+
+  @@index([status])
+  @@map("tenants")
+}
+
+model Branch {
+  id         String    @id @default(cuid())
+  tenantId   String    @map("tenant_id")
+  name       String
+  location   String
+  phone      String?
+  slug       String
+  qrCodeUrl  String?   @map("qr_code_url")
+  /// Custom QR foreground (modules) — Basic+ only at runtime.
+  qrFgColor  String?   @map("qr_fg_color")
+  /// Custom QR background — Basic+ only at runtime.
+  qrBgColor  String?   @map("qr_bg_color")
+  /// Overlay tenant logo in QR center (PNG) — Basic+ only.
+  qrUseLogo  Boolean   @default(false) @map("qr_use_logo")
+  isActive   Boolean   @default(true) @map("is_active")
+  isDefault  Boolean   @default(false) @map("is_default")
+  deletedAt  DateTime? @map("deleted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription        Subscription?
+  categories          Category[]
+  menuItems           MenuItem[]
+  payments            Payment[]
+  subscriptionEvents  SubscriptionEvent[]
+  menuViews           MenuView[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, deletedAt])
+  @@map("branches")
+}
+
+/// Public menu page views for Basic/Full analytics (plan feature).
+model MenuView {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  branchId  String   @map("branch_id")
+  viewedAt  DateTime @default(now()) @map("viewed_at")
+  userAgent String?  @map("user_agent") @db.VarChar(255)
+  referer   String?  @db.VarChar(500)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([branchId, viewedAt])
+  @@index([tenantId, viewedAt])
+  @@map("menu_views")
+}
+
+model Subscription {
+  id                String             @id @default(cuid())
+  branchId          String             @unique @map("branch_id")
+  planId            String             @map("plan_id")
+  status            SubscriptionStatus @default(ACTIVE)
+  startDate         DateTime           @map("start_date")
+  expiryDate        DateTime?          @map("expiry_date")
+  isAutoRenew       Boolean            @default(false) @map("is_auto_renew")
+  /// Set when status becomes CANCELLED (FR-6.1 30-day retention clock).
+  cancelledAt       DateTime?          @map("cancelled_at")
+  /// Set after menu data purge at end of retention window.
+  retentionPurgedAt DateTime?          @map("retention_purged_at")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  branch Branch               @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  plan   Plan                 @relation(fields: [planId], references: [id])
+  alerts SubscriptionAlert[]
+  events SubscriptionEvent[]
+
+  @@index([status])
+  @@index([expiryDate])
+  @@index([cancelledAt])
+  @@map("subscriptions")
+}
+
+/// FR-9.4 — audit timeline of subscription changes per branch.
+model SubscriptionEvent {
+  id             String                @id @default(cuid())
+  subscriptionId String                @map("subscription_id")
+  branchId       String                @map("branch_id")
+  tenantId       String                @map("tenant_id")
+  kind           SubscriptionEventKind
+  fromStatus     String?               @map("from_status")
+  toStatus       String?               @map("to_status")
+  summary        String
+  actorType      ActivityUserType?     @map("actor_type")
+  actorId        String?               @map("actor_id")
+  meta           Json?
+  createdAt      DateTime              @default(now()) @map("created_at")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  branch       Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([branchId, createdAt])
+  @@index([subscriptionId, createdAt])
+  @@map("subscription_events")
+}
+
+/// Dedupes lifecycle emails per subscription + expiry period (FR-8.1 / §7.4).
+model SubscriptionAlert {
+  id             String                @id @default(cuid())
+  subscriptionId String                @map("subscription_id")
+  kind           SubscriptionAlertKind
+  expiryDate     DateTime              @map("expiry_date")
+  sentAt         DateTime              @default(now()) @map("sent_at")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, kind, expiryDate])
+  @@index([kind, sentAt])
+  @@map("subscription_alerts")
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  tenantId        String        @map("tenant_id")
+  branchId        String?       @map("branch_id")
+  amount          Decimal       @db.Decimal(12, 2)
+  paymentMethod   PaymentMethod @map("payment_method")
+  referenceNumber String        @map("reference_number")
+  screenshotUrl   String        @map("screenshot_url")
+  durationMonths  Int           @map("duration_months")
+  status          PaymentStatus @default(PENDING)
+  adminNotes      String?       @map("admin_notes")
+  rejectionReason String?       @map("rejection_reason")
+  approvedById    String?       @map("approved_by")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch     Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  approvedBy AdminUser? @relation("PaymentApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([tenantId])
+  @@map("payments")
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  branchId    String   @map("branch_id")
+  name        String
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  branch    Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  menuItems MenuItem[]
+
+  @@index([branchId, sortOrder])
+  @@map("categories")
+}
+
+model MenuItem {
+  id          String    @id @default(cuid())
+  categoryId  String    @map("category_id")
+  branchId    String    @map("branch_id")
+  name        String
+  description String?
+  price       Decimal   @db.Decimal(12, 2)
+  currency    String    @default("ETB")
+  imageUrl    String?   @map("image_url")
+  isAvailable Boolean   @default(true) @map("is_available")
+  isFeatured  Boolean   @default(false) @map("is_featured")
+  sortOrder   Int       @default(0) @map("sort_order")
+  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  branch   Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([branchId, deletedAt])
+  @@index([categoryId, sortOrder])
+  @@map("menu_items")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  tenantId  String           @map("tenant_id")
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false) @map("is_read")
+  sentAt    DateTime?        @map("sent_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, isRead])
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id         String           @id @default(cuid())
+  userType   ActivityUserType @map("user_type")
+  userId     String           @map("user_id")
+  action     ActivityAction
+  entityType String           @map("entity_type")
+  entityId   String?          @map("entity_id")
+  details    Json?
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tenantId  String    @map("tenant_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@map("password_reset_tokens")
+}
