@@ -11,6 +11,7 @@ import {
   chartTheme,
   formatCompactNumber,
 } from "../../components/charts/chart-theme";
+import { PageSkeleton } from "../../features/navigation/PageSkeleton";
 import { formatEtb } from "../../lib/plans";
 import { api, type ApiSuccess } from "../../lib/api";
 import {
@@ -112,9 +113,7 @@ export function AdminDashboardPage() {
         </p>
       </div>
 
-      {stats.isLoading && (
-        <p className="text-[var(--muted)]">Loading dashboard…</p>
-      )}
+      {stats.isLoading && !stats.data && <PageSkeleton rows={5} />}
       {stats.isError && (
         <p className="rounded-2xl bg-[rgba(255,107,107,0.12)] px-4 py-3 text-sm text-[var(--danger)]">
           Couldn't load dashboard stats.

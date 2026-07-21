@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ChartCard, KpiCard } from "../../components/charts/ChartCard";
 import { TrendAreaChart } from "../../components/charts/Charts";
 import { chartTheme } from "../../components/charts/chart-theme";
+import { PageSkeleton } from "../../features/navigation/PageSkeleton";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
 import { subscriptionStatusLabel } from "../../lib/status-labels";
@@ -77,9 +78,7 @@ export function TenantDashboardPage() {
         </p>
       </section>
 
-      {dashboard.isLoading && (
-        <p className="text-[var(--muted)]">Loading dashboard…</p>
-      )}
+      {dashboard.isLoading && !dashboard.data && <PageSkeleton rows={4} />}
       {dashboard.isError && (
         <p className="rounded-2xl bg-[rgba(255,107,107,0.12)] px-4 py-3 text-[var(--danger)]">
           Could not load dashboard.

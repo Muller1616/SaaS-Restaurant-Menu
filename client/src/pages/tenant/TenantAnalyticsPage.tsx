@@ -8,6 +8,7 @@ import {
   TrendAreaChart,
 } from "../../components/charts/Charts";
 import { chartTheme } from "../../components/charts/chart-theme";
+import { PageSkeleton } from "../../features/navigation/PageSkeleton";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
 
@@ -95,9 +96,7 @@ export function TenantAnalyticsPage() {
         </section>
       )}
 
-      {!locked && query.isLoading && (
-        <p className="text-[var(--muted)]">Loading analytics…</p>
-      )}
+      {!locked && query.isLoading && !query.data && <PageSkeleton rows={5} />}
 
       {!locked && query.isError && (
         <div className="rounded-2xl bg-[rgba(255,107,107,0.12)] px-4 py-3 text-sm text-[var(--danger)]">
