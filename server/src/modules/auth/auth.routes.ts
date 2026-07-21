@@ -46,7 +46,7 @@ authRouter.post("/admin/login", loginLimiter, async (req, res, next) => {
   try {
     const parsed = adminLoginSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "Validation failed", parsed.error.flatten());
+      throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
     }
 
     const result = await loginAdmin(parsed.data);
@@ -88,7 +88,7 @@ authRouter.post("/tenant/login", loginLimiter, async (req, res, next) => {
   try {
     const parsed = tenantLoginSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "Validation failed", parsed.error.flatten());
+      throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
     }
 
     const result = await loginTenant(parsed.data);
@@ -134,7 +134,7 @@ authRouter.post(
     try {
       const parsed = changePasswordSchema.safeParse(req.body);
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const result = await changeTenantPassword(req.user!.sub, parsed.data);
       res.json({ success: true, data: result });
@@ -148,7 +148,7 @@ authRouter.post("/tenant/forgot-password", loginLimiter, async (req, res, next) 
   try {
     const parsed = forgotPasswordSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "Validation failed", parsed.error.flatten());
+      throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
     }
     const result = await requestTenantPasswordReset(parsed.data.email);
     res.json({ success: true, data: result });
@@ -161,7 +161,7 @@ authRouter.post("/tenant/reset-password", loginLimiter, async (req, res, next) =
   try {
     const parsed = resetPasswordSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "Validation failed", parsed.error.flatten());
+      throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
     }
     const result = await resetTenantPassword(
       parsed.data.token,

@@ -339,7 +339,7 @@ export async function setTenantStatus(input: {
   const tenant = await prisma.tenant.findUnique({ where: { id: input.tenantId } });
   if (!tenant) throw new AppError(404, "Tenant not found");
   if (tenant.status === "PENDING_APPROVAL" || tenant.status === "REJECTED") {
-    throw new AppError(400, "Use approvals flow for pending/rejected registrations");
+    throw new AppError(400, "Choose this option only after approving or declining the application");
   }
 
   const updated = await prisma.tenant.update({
@@ -639,7 +639,7 @@ export async function sendAnnouncement(input: {
   tenantIds?: string[];
 }) {
   if (input.audience === "SELECTED" && !input.tenantIds?.length) {
-    throw new AppError(400, "Select at least one tenant for SELECTED audience");
+    throw new AppError(400, "Select at least one restaurant for a targeted announcement");
   }
 
   const tenants =

@@ -79,7 +79,7 @@ adminRouter.post(
     try {
       const parsed = bulkApproveSchema.safeParse(req.body);
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const results = await bulkApproveRegistrations(
         parsed.data.ids,
@@ -98,7 +98,7 @@ adminRouter.post(
     try {
       const parsed = bulkRejectSchema.safeParse(req.body);
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const results = await bulkRejectRegistrations(
         parsed.data.ids,
@@ -142,7 +142,7 @@ adminRouter.post(
     try {
       const parsed = rejectRegistrationSchema.safeParse(req.body ?? {});
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const result = await rejectRegistration(
         String(req.params.id),
@@ -196,7 +196,7 @@ adminRouter.post(
       });
       const parsed = schema.safeParse(req.body ?? {});
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const result = await approvePayment({
         paymentId: String(req.params.id),
@@ -218,7 +218,7 @@ adminRouter.post(
       const schema = z.object({ reason: z.string().optional() });
       const parsed = schema.safeParse(req.body ?? {});
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const result = await rejectPayment({
         paymentId: String(req.params.id),
@@ -264,7 +264,7 @@ adminRouter.post(
       });
       const parsed = schema.safeParse(req.body ?? {});
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const result = await adminExtendSubscription({
         subscriptionId: String(req.params.id),
@@ -287,7 +287,7 @@ adminRouter.post(
       });
       const parsed = schema.safeParse(req.body);
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const result = await adminSetSubscriptionStatus({
         subscriptionId: String(req.params.id),
@@ -353,7 +353,7 @@ adminRouter.post(
       });
       const parsed = schema.safeParse(req.body);
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const data = await setTenantStatus({
         tenantId: String(req.params.id),
@@ -397,7 +397,7 @@ adminRouter.patch(
     try {
       const parsed = updatePlanSchema.safeParse(req.body);
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const data = await updatePlanAdmin(
         String(req.params.id),
@@ -429,7 +429,7 @@ adminRouter.post(
     try {
       const parsed = announcementSchema.safeParse(req.body);
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const data = await sendAnnouncement({
         adminId: req.user!.sub,
