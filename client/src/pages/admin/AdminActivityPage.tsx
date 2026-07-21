@@ -2,6 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { AdminPagination } from "../../components/AdminPagination";
 import { api, type ApiSuccess } from "../../lib/api";
+import {
+  activityActionLabel,
+  activityActorLabel,
+} from "../../lib/status-labels";
 
 const ACTIVITY_PAGE_SIZE = 11;
 
@@ -23,6 +27,13 @@ type PageResult<T> = {
   total: number;
   totalPages: number;
 };
+
+function entityTypeLabel(value: string) {
+  return value
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 async function fetchLogs(page: number) {
   const { data } = await api.get<ApiSuccess<PageResult<Log>>>(
@@ -57,8 +68,7 @@ export function AdminActivityPage() {
           Activity log
         </h1>
         <p className="mt-1 text-[var(--muted)]">
-          Recent admin and tenant actions across KitchenOS ({ACTIVITY_PAGE_SIZE}{" "}
-          per page).
+          Recent admin and restaurant actions across KitchenOS.
         </p>
       </div>
 
@@ -82,14 +92,16 @@ export function AdminActivityPage() {
                   {new Date(log.createdAt).toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-white">
-                  {log.userType}
+                  {activityActorLabel(log.userType)}
                   <span className="block text-xs text-[var(--muted)]">
                     {log.userId.slice(0, 10)}…
                   </span>
                 </td>
-                <td className="px-4 py-3 font-medium text-white">{log.action}</td>
+                <td className="px-4 py-3 font-medium text-white">
+                  {activityActionLabel(log.action)}
+                </td>
                 <td className="px-4 py-3 text-white">
-                  {log.entityType}
+                  {entityTypeLabel(log.entityType)}
                   {log.entityId && (
                     <span className="block text-xs text-[var(--muted)]">
                       {log.entityId.slice(0, 12)}…
@@ -102,7 +114,7 @@ export function AdminActivityPage() {
         </table>
         {query.data?.items.length === 0 && (
           <p className="px-4 py-10 text-center text-[var(--muted)]">
-            No activity yet.
+            No recent activity.
           </p>
         )}
       </div>

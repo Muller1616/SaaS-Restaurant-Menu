@@ -3,6 +3,11 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { AdminPagination } from "../../components/AdminPagination";
 import { api, type ApiSuccess } from "../../lib/api";
+import {
+  filterOptionLabel,
+  subscriptionStatusLabel,
+  tenantStatusLabel,
+} from "../../lib/status-labels";
 
 type BranchRow = {
   id: string;
@@ -92,7 +97,7 @@ export function AdminBranchesPage() {
           Branches
         </h1>
         <p className="mt-1 text-[var(--muted)]">
-          All restaurant locations across tenants (20 per page).
+          All restaurant locations across the platform.
         </p>
       </div>
 
@@ -105,7 +110,7 @@ export function AdminBranchesPage() {
               setQ(e.target.value);
               setPage(1);
             }}
-            placeholder="Branch, tenant, email…"
+            placeholder="Branch, restaurant, email…"
             className="w-64 rounded-xl border border-[var(--line)] bg-black/25 px-3 py-2 text-white outline-none focus:border-[var(--gold)]"
           />
         </label>
@@ -139,7 +144,7 @@ export function AdminBranchesPage() {
                 : "border border-white/15 text-[var(--muted)] hover:border-[var(--gold)]",
             ].join(" ")}
           >
-            {item.replaceAll("_", " ")}
+            {filterOptionLabel(item, "subscription")}
           </button>
         ))}
       </div>
@@ -188,7 +193,7 @@ export function AdminBranchesPage() {
                   </Link>
                   <p className="text-[var(--muted)]">{row.tenant.email}</p>
                   <p className="text-xs text-[var(--muted)]">
-                    {row.tenant.status}
+                    {tenantStatusLabel(row.tenant.status)}
                   </p>
                 </td>
                 <td className="px-4 py-3 text-white">
@@ -196,8 +201,8 @@ export function AdminBranchesPage() {
                 </td>
                 <td className="px-4 py-3 text-white">
                   {row.subscription
-                    ? row.subscription.status.replaceAll("_", " ")
-                    : "None"}
+                    ? subscriptionStatusLabel(row.subscription.status)
+                    : subscriptionStatusLabel("NO_SUBSCRIPTION")}
                   {row.subscription?.expiryDate && (
                     <span className="block text-xs text-[var(--muted)]">
                       exp{" "}

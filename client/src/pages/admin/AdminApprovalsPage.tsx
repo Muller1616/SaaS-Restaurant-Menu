@@ -3,6 +3,7 @@ import axios from "axios";
 import { useMemo, useState } from "react";
 import { api, type ApiSuccess } from "../../lib/api";
 import { formatEtb } from "../../lib/plans";
+import { paymentMethodLabel } from "../../lib/status-labels";
 
 type PendingRegistration = {
   id: string;
@@ -103,8 +104,9 @@ export function AdminApprovalsPage() {
     onError: (error) => {
       setActionError(
         axios.isAxiosError(error)
-          ? (error.response?.data?.message as string) || "Approve failed"
-          : "Approve failed",
+          ? (error.response?.data?.message as string) ||
+              "Couldn't approve registration"
+          : "Couldn't approve registration",
       );
     },
   });
@@ -121,13 +123,14 @@ export function AdminApprovalsPage() {
       setRejectReason("");
       setSelectedId(null);
       invalidateAll();
-      showToast(`${data.businessName} rejected`);
+      showToast(`${data.businessName} declined`);
     },
     onError: (error) => {
       setActionError(
         axios.isAxiosError(error)
-          ? (error.response?.data?.message as string) || "Reject failed"
-          : "Reject failed",
+          ? (error.response?.data?.message as string) ||
+              "Couldn't decline registration"
+          : "Couldn't decline registration",
       );
     },
   });
@@ -144,14 +147,19 @@ export function AdminApprovalsPage() {
       setChecked({});
       setSelectedId(null);
       invalidateAll();
-      showToast(`Approved ${data.length} registration(s)`);
+      showToast(
+        data.length === 1
+          ? "1 registration approved"
+          : `${data.length} registrations approved`,
+      );
       if (data[0]) setApprovedCreds(data[0]);
     },
     onError: (error) => {
       setActionError(
         axios.isAxiosError(error)
-          ? (error.response?.data?.message as string) || "Bulk approve failed"
-          : "Bulk approve failed",
+          ? (error.response?.data?.message as string) ||
+              "Couldn't approve selected registrations"
+          : "Couldn't approve selected registrations",
       );
     },
   });
@@ -170,13 +178,18 @@ export function AdminApprovalsPage() {
       setChecked({});
       setSelectedId(null);
       invalidateAll();
-      showToast(`Rejected ${data.length} registration(s)`);
+      showToast(
+        data.length === 1
+          ? "1 registration declined"
+          : `${data.length} registrations declined`,
+      );
     },
     onError: (error) => {
       setActionError(
         axios.isAxiosError(error)
-          ? (error.response?.data?.message as string) || "Bulk reject failed"
-          : "Bulk reject failed",
+          ? (error.response?.data?.message as string) ||
+              "Couldn't decline selected registrations"
+          : "Couldn't decline selected registrations",
       );
     },
   });
@@ -195,15 +208,15 @@ export function AdminApprovalsPage() {
             Review queue
           </p>
           <h1 className="font-[family-name:var(--font-display)] text-4xl text-white">
-            Pending Approvals
+            Applications
           </h1>
           <p className="mt-1 text-[var(--muted)]">
-            Approve to create login credentials, default branch, and subscription.
+            Review new restaurant applications and approve or decline them.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-full border border-[var(--gold)]/30 bg-[rgba(212,165,116,0.12)] px-3 py-1.5 text-sm font-semibold text-[var(--gold-soft)]">
-            {query.data?.length ?? 0} pending
+            {query.data?.length ?? 0} awaiting review
           </span>
           <button
             type="button"
@@ -219,7 +232,7 @@ export function AdminApprovalsPage() {
             onClick={() => setBulkRejectOpen(true)}
             className="rounded-full border border-white/15 px-4 py-2 text-sm text-[var(--danger)] hover:border-[var(--danger)] disabled:opacity-40"
           >
-            Reject selected
+            Decline selected
           </button>
         </div>
       </div>
@@ -242,10 +255,12 @@ export function AdminApprovalsPage() {
         </div>
       )}
 
-      {query.isLoading && <p className="text-[var(--muted)]">Loading registrations…</p>}
+      {query.isLoading && (
+        <p className="text-[var(--muted)]">Loading registrations…</p>
+      )}
       {query.isError && (
         <p className="rounded-2xl bg-[rgba(255,107,107,0.12)] px-4 py-3 text-sm text-[var(--danger)]">
-          Failed to load pending registrations.
+          Couldn't load pending registrations.
         </p>
       )}
 
@@ -255,7 +270,7 @@ export function AdminApprovalsPage() {
             All clear
           </p>
           <p className="mt-2 text-[var(--muted)]">
-            No pending registrations right now.
+            No registrations waiting for review.
           </p>
         </div>
       )}
@@ -371,7 +386,7 @@ export function AdminApprovalsPage() {
                     <>
                       <Row
                         label="Payment"
-                        value={`${formatEtb(selected.latestPayment.amount)} · ${selected.latestPayment.paymentMethod}`}
+                        value={`${formatEtb(selected.latestPayment.amount)} · ${paymentMethodLabel(selected.latestPayment.paymentMethod)}`}
                       />
                       <Row
                         label="Reference"
@@ -424,13 +439,13 @@ export function AdminApprovalsPage() {
                       onClick={() => setRejectOpen(true)}
                       className="rounded-full border border-white/15 px-5 py-2.5 text-sm text-[var(--danger)] hover:border-[var(--danger)] disabled:opacity-50"
                     >
-                      Reject
+                      Decline
                     </button>
                   </div>
                 ) : (
                   <div className="space-y-3 rounded-2xl border border-[var(--danger)]/30 bg-[rgba(255,107,107,0.08)] p-4">
                     <p className="text-sm font-medium text-[var(--danger)]">
-                      Reject {selected.businessName}?
+                      Decline {selected.businessName}?
                     </p>
                     <textarea
                       value={rejectReason}
@@ -450,7 +465,9 @@ export function AdminApprovalsPage() {
                         }
                         className="rounded-full border border-[var(--danger)] bg-[rgba(255,107,107,0.2)] px-4 py-2 text-sm font-semibold text-[var(--danger)] disabled:opacity-50"
                       >
-                        {rejectMutation.isPending ? "Rejecting…" : "Confirm reject"}
+                        {rejectMutation.isPending
+                          ? "Declining…"
+                          : "Confirm decline"}
                       </button>
                       <button
                         type="button"
@@ -475,7 +492,8 @@ export function AdminApprovalsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
           <div className="w-full max-w-md rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)] p-6">
             <h3 className="font-[family-name:var(--font-display)] text-2xl text-white">
-              Reject {selectedIds.length} registration(s)?
+              Decline {selectedIds.length} registration
+              {selectedIds.length === 1 ? "" : "s"}?
             </h3>
             <textarea
               value={bulkRejectReason}
@@ -546,7 +564,7 @@ export function AdminApprovalsPage() {
                 href={approvedCreds.loginUrl}
                 className="rounded-full bg-[var(--gold)] px-5 py-2.5 text-sm font-bold text-[var(--night)]"
               >
-                Open tenant login
+                Open restaurant login
               </a>
               <button
                 type="button"

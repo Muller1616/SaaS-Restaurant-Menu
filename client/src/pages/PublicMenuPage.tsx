@@ -91,7 +91,7 @@ export function PublicMenuPage() {
       return;
     }
     await navigator.clipboard.writeText(url);
-    window.alert("Menu link copied");
+    window.alert("Menu link copied to your clipboard");
   }
 
   return (
