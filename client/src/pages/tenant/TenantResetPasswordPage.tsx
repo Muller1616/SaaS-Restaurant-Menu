@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import { api } from "../../lib/api";
+import { BackButton } from "../../components/BackButton";
 
 const schema = z
   .object({
@@ -54,6 +55,7 @@ export function TenantResetPasswordPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[var(--night)] px-4 py-12">
       <div className="w-full max-w-md rounded-[2rem] border border-[var(--line)] bg-[var(--panel)] p-8">
+        <BackButton fallbackTo="/tenant/login" className="mb-3" />
         <p className="text-[11px] tracking-[0.3em] text-[var(--gold)] uppercase">
           KitchenOS
         </p>
