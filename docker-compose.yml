@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kitchenos-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: kitchenos
+      POSTGRES_PASSWORD: kitchenos
+      POSTGRES_DB: kitchenos
+    volumes:
+      - kitchenos_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kitchenos -d kitchenos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  kitchenos_pgdata:
