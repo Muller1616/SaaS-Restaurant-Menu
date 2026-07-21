@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { AdminPagination } from "../../components/AdminPagination";
+import { BackButton } from "../../components/BackButton";
 import { api, type ApiSuccess } from "../../lib/api";
 
 type BranchRow = {
@@ -85,6 +86,7 @@ export function AdminBranchesPage() {
   return (
     <div className="space-y-6">
       <div>
+        <BackButton fallbackTo="/admin" className="mb-3" />
         <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
           Network
         </p>
