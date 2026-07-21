@@ -343,14 +343,21 @@ model Notification {
 }
 
 model ActivityLog {
-  id         String           @id @default(cuid())
-  userType   ActivityUserType @map("user_type")
-  userId     String           @map("user_id")
-  action     ActivityAction
-  entityType String           @map("entity_type")
-  entityId   String?          @map("entity_id")
-  details    Json?
-  createdAt  DateTime         @default(now()) @map("created_at")
+  id          String           @id @default(cuid())
+  userType    ActivityUserType @map("user_type")
+  userId      String           @map("user_id")
+  /// Human-readable actor, e.g. "Ada Admin <admin@kitchenos.local>"
+  actorLabel  String           @default("") @map("actor_label")
+  action      ActivityAction
+  entityType  String           @map("entity_type")
+  entityId    String?          @map("entity_id")
+  /// Human-readable target, e.g. restaurant or branch name
+  entityLabel String?          @map("entity_label")
+  /// Full sentence for Studio / admin UI inspection
+  summary     String           @default("")
+  /// Extra context only — never passwords, tokens, or secrets
+  details     Json?
+  createdAt   DateTime         @default(now()) @map("created_at")
 
   @@index([entityType, entityId])
   @@index([createdAt])
