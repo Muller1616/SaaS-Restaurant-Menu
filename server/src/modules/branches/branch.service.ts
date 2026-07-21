@@ -92,7 +92,7 @@ async function getTenantPlanContext(tenantId: string) {
   });
 
   if (!tenant || tenant.status !== "ACTIVE") {
-    throw new AppError(403, "Tenant account is not active");
+    throw new AppError(403, "Your restaurant account isn’t active");
   }
 
   return tenant;

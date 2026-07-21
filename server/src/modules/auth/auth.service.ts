@@ -219,7 +219,7 @@ export async function loginTenant(input: TenantLoginInput) {
   }
 
   if (tenant.status === "PENDING_APPROVAL") {
-    throw new AppError(403, "Your registration is still pending approval");
+    throw new AppError(403, "Your application is still under review. We’ll email you once it’s approved.");
   }
   if (tenant.status === "REJECTED") {
     throw new AppError(
@@ -239,7 +239,7 @@ export async function loginTenant(input: TenantLoginInput) {
     );
   }
   if (tenant.status !== "ACTIVE") {
-    throw new AppError(403, "Account is not active");
+    throw new AppError(403, "This account isn’t available for sign-in right now.");
   }
 
   const valid = await bcrypt.compare(input.password, tenant.passwordHash);
@@ -377,7 +377,7 @@ export async function resetTenantPassword(token: string, newPassword: string) {
   });
 
   if (!record) {
-    throw new AppError(400, "Invalid or expired reset token");
+    throw new AppError(400, "This password reset link is invalid or has expired. Please request a new one.");
   }
 
   const passwordHash = await bcrypt.hash(newPassword, 10);

@@ -70,7 +70,7 @@ menuRouter.post(
     try {
       const parsed = categorySchema.safeParse(req.body);
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const category = await createCategory(
         req.user!.sub,
@@ -91,7 +91,7 @@ menuRouter.patch(
     try {
       const parsed = categorySchema.safeParse(req.body);
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const category = await updateCategory(
         req.user!.sub,
@@ -131,7 +131,7 @@ menuRouter.post(
     try {
       const parsed = menuItemSchema.safeParse(req.body);
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const item = await createMenuItem(
         req.user!.sub,
@@ -154,7 +154,7 @@ menuRouter.patch(
     try {
       const parsed = menuItemSchema.safeParse(req.body);
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const item = await updateMenuItem(
         req.user!.sub,

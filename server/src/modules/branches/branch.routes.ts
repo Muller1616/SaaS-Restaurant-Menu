@@ -30,7 +30,7 @@ branchRouter.post("/", async (req: AuthedRequest, res, next) => {
   try {
     const parsed = branchInputSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "Validation failed", parsed.error.flatten());
+      throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
     }
     const branch = await createBranch(req.user!.sub, parsed.data);
     res.status(201).json({ success: true, data: branch });
@@ -43,7 +43,7 @@ branchRouter.patch("/:id", async (req: AuthedRequest, res, next) => {
   try {
     const parsed = branchInputSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "Validation failed", parsed.error.flatten());
+      throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
     }
     const branch = await updateBranch(
       req.user!.sub,
