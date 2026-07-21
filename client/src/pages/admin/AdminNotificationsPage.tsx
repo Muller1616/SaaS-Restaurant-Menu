@@ -51,7 +51,9 @@ export function AdminNotificationsPage() {
       return data.data as { recipients: number };
     },
     onSuccess: (data) => {
-      setNotice(`Announcement sent to ${data.recipients} tenant(s).`);
+      setNotice(
+        `Announcement sent to ${data.recipients} restaurant${data.recipients === 1 ? "" : "s"}.`,
+      );
       setTitle("");
       setMessage("");
       setSelectedIds([]);
@@ -59,8 +61,9 @@ export function AdminNotificationsPage() {
     onError: (err) =>
       setError(
         axios.isAxiosError(err)
-          ? (err.response?.data?.message as string) || "Send failed"
-          : "Send failed",
+          ? (err.response?.data?.message as string) ||
+              "Couldn't send announcement"
+          : "Couldn't send announcement",
       ),
   });
 
@@ -80,8 +83,8 @@ export function AdminNotificationsPage() {
           Announcements
         </h1>
         <p className="mt-1 text-[var(--muted)]">
-          Send to all active restaurants or a selected subset (inbox + email if
-          enabled).
+          Reach all active restaurants or a selected list — inbox plus email when
+          enabled.
         </p>
       </div>
 
@@ -132,7 +135,7 @@ export function AdminNotificationsPage() {
                 checked={audience === "ALL_ACTIVE"}
                 onChange={() => setAudience("ALL_ACTIVE")}
               />
-              All active tenants
+              All active restaurants
             </label>
             <label className="flex items-center gap-2">
               <input
@@ -140,7 +143,7 @@ export function AdminNotificationsPage() {
                 checked={audience === "SELECTED"}
                 onChange={() => setAudience("SELECTED")}
               />
-              Selected tenants
+              Selected restaurants
             </label>
           </fieldset>
 
@@ -154,17 +157,19 @@ export function AdminNotificationsPage() {
           >
             {send.isPending
               ? "Sending…"
-              : `Send to ${recipientCount} tenant${recipientCount === 1 ? "" : "s"}`}
+              : `Send to ${recipientCount} restaurant${recipientCount === 1 ? "" : "s"}`}
           </button>
         </form>
 
         <aside className="rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)] p-6">
           <h2 className="font-[family-name:var(--font-display)] text-2xl text-white">
-            {audience === "ALL_ACTIVE" ? "Audience preview" : "Select tenants"}
+            {audience === "ALL_ACTIVE"
+              ? "Audience preview"
+              : "Select restaurants"}
           </h2>
           <p className="mt-2 text-sm text-[var(--muted)]">
             {audience === "ALL_ACTIVE"
-              ? `${tenants.data?.length ?? 0} active tenants will receive this announcement.`
+              ? `${tenants.data?.length ?? 0} active restaurants will receive this announcement.`
               : `${selectedIds.length} selected.`}
           </p>
           {audience === "SELECTED" && (

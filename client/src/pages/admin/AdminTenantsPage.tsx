@@ -4,6 +4,11 @@ import { useMemo, useState } from "react";
 import { AdminPagination } from "../../components/AdminPagination";
 import { useAdminAuth } from "../../features/admin/AdminAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
+import {
+  filterOptionLabel,
+  subscriptionStatusLabel,
+  tenantStatusLabel,
+} from "../../lib/status-labels";
 
 type TenantRow = {
   id: string;
@@ -147,10 +152,11 @@ export function AdminTenantsPage() {
           Accounts
         </p>
         <h1 className="font-[family-name:var(--font-display)] text-3xl text-white">
-          Tenants
+          Restaurants
         </h1>
         <p className="mt-1 text-[var(--muted)]">
-          Browse restaurant accounts, suspend access, or inspect branches.
+          Review restaurant accounts, pause access when needed, or check their
+          locations.
         </p>
       </div>
 
@@ -175,7 +181,7 @@ export function AdminTenantsPage() {
           {["ALL", "ACTIVE", "PENDING_APPROVAL", "SUSPENDED", "REJECTED"].map(
             (s) => (
               <option key={s} value={s}>
-                {s}
+                {filterOptionLabel(s, "tenant")}
               </option>
             ),
           )}
@@ -260,14 +266,16 @@ export function AdminTenantsPage() {
                       <p className="text-[var(--muted)]">{tenant.email}</p>
                     </td>
                     <td className="px-4 py-3 text-white">{tenant.plan.name}</td>
-                    <td className="px-4 py-3 text-white">{tenant.status}</td>
+                    <td className="px-4 py-3 text-white">
+                      {tenantStatusLabel(tenant.status)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {list.data?.items.length === 0 && (
               <p className="px-4 py-10 text-center text-[var(--muted)]">
-                No tenants match these filters.
+                No restaurants match these filters.
               </p>
             )}
           </div>
@@ -283,7 +291,9 @@ export function AdminTenantsPage() {
 
         <aside className="rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)] p-5">
           {!selected && (
-            <p className="text-[var(--muted)]">Select a tenant to view details.</p>
+            <p className="text-[var(--muted)]">
+              Select a restaurant to view details.
+            </p>
           )}
           {selected && detail.data && (
             <div className="space-y-3 text-sm">
@@ -296,7 +306,8 @@ export function AdminTenantsPage() {
               <p className="text-white">{detail.data.phone}</p>
               <p className="text-[var(--muted)]">{detail.data.businessLocation}</p>
               <p className="text-white">
-                Plan: {detail.data.plan.name} · Status: {detail.data.status}
+                Plan: {detail.data.plan.name} · Status:{" "}
+                {tenantStatusLabel(detail.data.status)}
               </p>
               {detail.data.suspendedReason && (
                 <p className="text-[var(--danger)]">
@@ -310,7 +321,9 @@ export function AdminTenantsPage() {
                   {detail.data.branches.map((branch) => (
                     <li key={branch.id}>
                       {branch.name} · {branch.itemCount} items ·{" "}
-                      {branch.subscriptionStatus ?? "—"}
+                      {subscriptionStatusLabel(
+                        branch.subscriptionStatus ?? "NO_SUBSCRIPTION",
+                      )}
                     </li>
                   ))}
                 </ul>

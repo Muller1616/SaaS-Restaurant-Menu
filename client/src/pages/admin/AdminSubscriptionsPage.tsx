@@ -4,6 +4,12 @@ import { useState } from "react";
 import { AdminPagination } from "../../components/AdminPagination";
 import { api, type ApiSuccess } from "../../lib/api";
 import { formatEtb } from "../../lib/plans";
+import {
+  activityActorLabel,
+  filterOptionLabel,
+  subscriptionEventLabel,
+  subscriptionStatusLabel,
+} from "../../lib/status-labels";
 
 type SubRow = {
   id: string;
@@ -140,7 +146,7 @@ export function AdminSubscriptionsPage() {
           Subscriptions
         </h1>
         <p className="mt-1 text-[var(--muted)]">
-          Monitor branch subscriptions, history, and quick actions.
+          Track branch plans, review history, and take quick billing actions.
         </p>
       </div>
 
@@ -160,7 +166,7 @@ export function AdminSubscriptionsPage() {
                 : "border border-white/15 text-[var(--muted)] hover:border-[var(--gold)]",
             ].join(" ")}
           >
-            {item.replaceAll("_", " ")}
+            {filterOptionLabel(item, "subscription")}
           </button>
         ))}
       </div>
@@ -210,7 +216,7 @@ export function AdminSubscriptionsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-white">
-                      {row.status.replaceAll("_", " ")}
+                      {subscriptionStatusLabel(row.status)}
                     </td>
                     <td className="px-4 py-3 text-white">
                       {row.expiryDate
@@ -273,7 +279,7 @@ export function AdminSubscriptionsPage() {
             </table>
             {query.data?.items.length === 0 && (
               <p className="px-4 py-10 text-center text-[var(--muted)]">
-                No subscriptions for this filter.
+                No subscriptions match this filter.
               </p>
             )}
           </div>
@@ -291,8 +297,8 @@ export function AdminSubscriptionsPage() {
         <aside className="rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)] p-5">
           {!historyId && (
             <p className="text-sm text-[var(--muted)]">
-              Select <span className="text-white">History</span> on a row to
-              view the subscription timeline for that branch.
+              Choose <span className="text-white">History</span> on a row to see
+              that branch’s subscription timeline.
             </p>
           )}
           {historyId && history.isLoading && (
@@ -302,7 +308,7 @@ export function AdminSubscriptionsPage() {
             <div className="space-y-4">
               <div>
                 <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
-                  FR-9.4
+                  Timeline
                 </p>
                 <h2 className="font-[family-name:var(--font-display)] text-2xl text-white">
                   {history.data.branch.name}
@@ -322,7 +328,7 @@ export function AdminSubscriptionsPage() {
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-semibold text-[var(--gold-soft)]">
-                        {event.kind.replaceAll("_", " ")}
+                        {subscriptionEventLabel(event.kind)}
                       </span>
                       <span className="text-xs text-[var(--muted)]">
                         {new Date(event.createdAt).toLocaleString()}
@@ -331,8 +337,16 @@ export function AdminSubscriptionsPage() {
                     <p className="mt-1 text-white">{event.summary}</p>
                     {(event.fromStatus || event.toStatus) && (
                       <p className="mt-1 text-xs text-[var(--muted)]">
-                        {event.fromStatus ?? "—"} → {event.toStatus ?? "—"}
-                        {event.actorType ? ` · ${event.actorType}` : ""}
+                        {event.fromStatus
+                          ? subscriptionStatusLabel(event.fromStatus)
+                          : "—"}{" "}
+                        →{" "}
+                        {event.toStatus
+                          ? subscriptionStatusLabel(event.toStatus)
+                          : "—"}
+                        {event.actorType
+                          ? ` · ${activityActorLabel(event.actorType)}`
+                          : ""}
                       </p>
                     )}
                   </li>

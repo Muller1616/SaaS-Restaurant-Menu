@@ -7,9 +7,17 @@ import {
   DualAxisPaymentsChart,
   TrendAreaChart,
 } from "../../components/charts/Charts";
-import { formatCompactNumber } from "../../components/charts/chart-theme";
+import {
+  chartTheme,
+  formatCompactNumber,
+} from "../../components/charts/chart-theme";
 import { formatEtb } from "../../lib/plans";
 import { api, type ApiSuccess } from "../../lib/api";
+import {
+  paymentMethodLabel,
+  paymentStatusLabel,
+  subscriptionStatusLabel,
+} from "../../lib/status-labels";
 
 type DashboardStats = {
   totalTenants: number;
@@ -58,9 +66,9 @@ function StatLinkCard({
       className={[
         "rounded-[1.75rem] border p-5 transition",
         emphasize
-          ? "border-[var(--gold)]/40 bg-[linear-gradient(135deg,rgba(212,165,116,0.16),rgba(18,26,23,0.95)_45%)]"
+          ? "border-[rgba(91,141,239,0.45)] bg-[linear-gradient(145deg,rgba(91,141,239,0.18),rgba(18,26,23,0.96)_50%)]"
           : "border-[var(--line)] bg-[var(--panel)]",
-        to ? "hover:-translate-y-0.5 hover:border-[var(--gold)]/60" : "",
+        to ? "hover:-translate-y-0.5 hover:border-[rgba(91,141,239,0.7)]" : "",
       ].join(" ")}
     >
       <p className="text-sm text-[var(--muted)]">{label}</p>
@@ -68,8 +76,11 @@ function StatLinkCard({
         {value}
       </p>
       {emphasize && value > 0 && (
-        <p className="mt-2 text-xs font-semibold tracking-wide text-[var(--gold-soft)] uppercase">
-          Needs attention
+        <p
+          className="mt-2 text-xs font-semibold tracking-wide uppercase"
+          style={{ color: chartTheme.primarySoft }}
+        >
+          Action needed
         </p>
       )}
     </div>
@@ -96,68 +107,71 @@ export function AdminDashboardPage() {
           Dashboard
         </h1>
         <p className="mt-1 text-[var(--muted)]">
-          Live platform metrics from tenants, subscriptions, payments, and menu
-          views. Refreshes every minute.
+          Live snapshot of restaurants, plans, payments, and menu views.
+          Refreshes every minute.
         </p>
       </div>
 
       {stats.isLoading && (
-        <p className="text-[var(--muted)]">Loading dashboard stats…</p>
+        <p className="text-[var(--muted)]">Loading dashboard…</p>
       )}
       {stats.isError && (
         <p className="rounded-2xl bg-[rgba(255,107,107,0.12)] px-4 py-3 text-sm text-[var(--danger)]">
-          Failed to load dashboard stats.
+          Couldn't load dashboard stats.
         </p>
       )}
 
       {stats.data && (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <StatLinkCard label="Total Tenants" value={stats.data.totalTenants} />
+            <StatLinkCard label="Total restaurants" value={stats.data.totalTenants} />
             <StatLinkCard
-              label="Active Subscriptions"
+              label="Active subscriptions"
               value={stats.data.activeSubscriptions}
             />
             <StatLinkCard
-              label="Pending Approvals"
+              label="Pending approvals"
               value={stats.data.pendingApprovals}
               emphasize
               to="/admin/approvals"
             />
             <StatLinkCard
-              label="Pending Payments"
+              label="Pending payments"
               value={stats.data.pendingPayments}
               emphasize
               to="/admin/payments"
             />
             <StatLinkCard
-              label="Near Expiry (≤7 days)"
+              label="Near expiry (≤7 days)"
               value={stats.data.nearExpiry}
             />
             <StatLinkCard
-              label="Expired This Week"
+              label="Expired this week"
               value={stats.data.expiredThisWeek}
             />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
             <KpiCard
-              label="New tenants (30d)"
+              label="New restaurants (30d)"
               value={stats.data.newTenants30d}
+              accent="primary"
             />
             <KpiCard
               label="Menu views (30d)"
               value={formatCompactNumber(stats.data.menuViews30d)}
+              accent="secondary"
             />
             <KpiCard
-              label="Approved revenue (30d)"
+              label="Confirmed revenue (30d)"
               value={formatEtb(stats.data.approvedRevenue30d)}
+              accent="success"
             />
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
             <ChartCard
-              title="Tenant signups"
+              title="Restaurant signups"
               subtitle="New restaurant accounts over the last 30 days"
             >
               <TrendAreaChart
@@ -165,7 +179,8 @@ export function AdminDashboardPage() {
                 xKey="date"
                 yKey="count"
                 yLabel="Signups"
-                emptyMessage="No new tenants in the last 30 days."
+                color={chartTheme.primary}
+                emptyMessage="No new restaurants signed up in the last 30 days."
               />
             </ChartCard>
 
@@ -178,14 +193,15 @@ export function AdminDashboardPage() {
                 xKey="date"
                 yKey="views"
                 yLabel="Views"
-                emptyMessage="No menu views recorded in the last 30 days."
+                color={chartTheme.secondary}
+                emptyMessage="No menu views yet — guests will show up once QR codes are shared."
               />
             </ChartCard>
           </div>
 
           <ChartCard
             title="Payments activity"
-            subtitle="Daily submissions vs approved amount (ETB)"
+            subtitle="Daily submissions vs confirmed amount (ETB)"
           >
             <DualAxisPaymentsChart data={stats.data.charts.paymentsLast30Days} />
           </ChartCard>
@@ -193,30 +209,37 @@ export function AdminDashboardPage() {
           <div className="grid gap-4 xl:grid-cols-3">
             <ChartCard title="Subscriptions" subtitle="By current status">
               <DistributionDonutChart
-                data={stats.data.charts.subscriptionsByStatus}
+                data={stats.data.charts.subscriptionsByStatus.map((row) => ({
+                  status: subscriptionStatusLabel(row.status),
+                  count: row.count,
+                }))}
                 nameKey="status"
                 valueKey="count"
-                emptyMessage="No subscriptions yet."
+                emptyMessage="No subscriptions to chart yet."
               />
             </ChartCard>
             <ChartCard title="Payments" subtitle="By status">
               <DistributionDonutChart
-                data={stats.data.charts.paymentsByStatus}
+                data={stats.data.charts.paymentsByStatus.map((row) => ({
+                  status: paymentStatusLabel(row.status),
+                  count: row.count,
+                }))}
                 nameKey="status"
                 valueKey="count"
-                emptyMessage="No payments yet."
+                emptyMessage="No payments to chart yet."
               />
             </ChartCard>
             <ChartCard title="Payment methods" subtitle="All-time mix">
               <ComparisonBarChart
                 data={stats.data.charts.paymentsByMethod.map((row) => ({
-                  method: row.method.replaceAll("_", " "),
+                  method: paymentMethodLabel(row.method),
                   count: row.count,
                 }))}
                 xKey="method"
                 yKey="count"
                 yLabel="Payments"
-                emptyMessage="No payment methods recorded."
+                colorByCategory
+                emptyMessage="No payment methods recorded yet."
               />
             </ChartCard>
           </div>

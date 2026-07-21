@@ -4,6 +4,11 @@ import { useMemo, useState } from "react";
 import { AdminPagination } from "../../components/AdminPagination";
 import { api, type ApiSuccess } from "../../lib/api";
 import { formatEtb } from "../../lib/plans";
+import {
+  filterOptionLabel,
+  paymentMethodLabel,
+  paymentStatusLabel,
+} from "../../lib/status-labels";
 
 type PaymentRow = {
   id: string;
@@ -69,7 +74,7 @@ export function AdminPaymentsPage() {
       return data.data;
     },
     onSuccess: async () => {
-      setNotice("Payment approved and subscription extended.");
+      setNotice("Payment confirmed and plan extended.");
       setSelectedId(null);
       setOverrideStartDate("");
       await queryClient.invalidateQueries({ queryKey: ["admin", "payments"] });
@@ -79,8 +84,9 @@ export function AdminPaymentsPage() {
     onError: (err) =>
       setError(
         axios.isAxiosError(err)
-          ? (err.response?.data?.message as string) || "Approve failed"
-          : "Approve failed",
+          ? (err.response?.data?.message as string) ||
+              "Couldn't confirm payment"
+          : "Couldn't confirm payment",
       ),
   });
 
@@ -90,7 +96,7 @@ export function AdminPaymentsPage() {
       return data.data;
     },
     onSuccess: async () => {
-      setNotice("Payment rejected.");
+      setNotice("Payment declined.");
       setReason("");
       setSelectedId(null);
       await queryClient.invalidateQueries({ queryKey: ["admin", "payments"] });
@@ -99,8 +105,9 @@ export function AdminPaymentsPage() {
     onError: (err) =>
       setError(
         axios.isAxiosError(err)
-          ? (err.response?.data?.message as string) || "Reject failed"
-          : "Reject failed",
+          ? (err.response?.data?.message as string) ||
+              "Couldn't decline payment"
+          : "Couldn't decline payment",
       ),
   });
 
@@ -122,13 +129,13 @@ export function AdminPaymentsPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
-            Ledger
+            Billing
           </p>
           <h1 className="font-[family-name:var(--font-display)] text-3xl text-white">
             Payments
           </h1>
           <p className="mt-1 text-[var(--muted)]">
-            Verify screenshots and extend subscriptions.
+            Review payment proof and confirm renewals to extend restaurant plans.
           </p>
         </div>
         <button
@@ -157,7 +164,7 @@ export function AdminPaymentsPage() {
                 : "border border-white/15 text-[var(--muted)] hover:border-[var(--gold)]",
             ].join(" ")}
           >
-            {item}
+            {filterOptionLabel(item, "payment")}
           </button>
         ))}
       </div>
@@ -209,17 +216,20 @@ export function AdminPaymentsPage() {
                     <td className="px-4 py-3 text-white">
                       {formatEtb(payment.amount)}
                       <span className="block text-xs text-[var(--muted)]">
-                        {payment.durationMonths} mo · {payment.paymentMethod}
+                        {payment.durationMonths} mo ·{" "}
+                        {paymentMethodLabel(payment.paymentMethod)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-white">{payment.status}</td>
+                    <td className="px-4 py-3 text-white">
+                      {paymentStatusLabel(payment.status)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {query.data?.items.length === 0 && (
               <p className="px-4 py-10 text-center text-[var(--muted)]">
-                No payments in this tab.
+                No payments in this queue.
               </p>
             )}
           </div>
@@ -247,7 +257,8 @@ export function AdminPaymentsPage() {
                 {formatEtb(selected.amount)} · {selected.durationMonths} months
               </p>
               <p className="text-[var(--muted)]">
-                {selected.paymentMethod} · {selected.referenceNumber}
+                {paymentMethodLabel(selected.paymentMethod)} ·{" "}
+                {selected.referenceNumber}
               </p>
               <a
                 href={selected.screenshotUrl}
@@ -291,14 +302,14 @@ export function AdminPaymentsPage() {
                       onClick={() => approve.mutate(selected.id)}
                       className="rounded-full bg-[var(--gold)] px-4 py-2 text-sm font-bold text-[var(--night)]"
                     >
-                      Approve
+                      Confirm
                     </button>
                     <button
                       type="button"
                       onClick={() => reject.mutate(selected.id)}
                       className="rounded-full border border-white/15 px-4 py-2 text-sm text-[var(--danger)] hover:border-[var(--danger)]"
                     >
-                      Reject
+                      Decline
                     </button>
                   </div>
                 </div>

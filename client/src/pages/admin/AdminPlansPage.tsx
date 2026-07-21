@@ -78,7 +78,7 @@ export function AdminPlansPage() {
       return data.data;
     },
     onSuccess: async () => {
-      setNotice("Plan updated");
+      setNotice("Plan updated.");
       setEditingId(null);
       await queryClient.invalidateQueries({ queryKey: ["admin", "plans"] });
       await queryClient.invalidateQueries({ queryKey: ["plans"] });
@@ -102,8 +102,8 @@ export function AdminPlansPage() {
         </h1>
         <p className="mt-1 text-[var(--muted)]">
           {isSuperAdmin
-            ? "Edit prices, limits, and feature flags used for registration."
-            : "View plan limits and feature flags. Editing requires Super Admin."}
+            ? "Adjust prices, limits, and features used at registration."
+            : "View plan limits and features. Editing requires Super Admin."}
         </p>
       </div>
 
@@ -171,7 +171,7 @@ export function AdminPlansPage() {
           <div className="w-full max-w-lg space-y-4 rounded-[1.75rem] border border-[var(--line)] bg-[#121a17] p-6">
             <div className="flex items-start justify-between gap-3">
               <h3 className="font-[family-name:var(--font-display)] text-3xl text-white">
-                Edit {editing.slug}
+                Edit {editing.name}
               </h3>
               <button
                 type="button"

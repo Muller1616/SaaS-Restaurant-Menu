@@ -75,7 +75,7 @@ export function AdminSettingsPage() {
           Settings
         </h1>
         <p className="mt-1 text-[var(--muted)]">
-          Admin profile, environment, and database backups.
+          Your admin profile, role permissions, and database backups.
         </p>
       </div>
 
@@ -94,7 +94,9 @@ export function AdminSettingsPage() {
           </div>
           <div>
             <dt className="text-[var(--muted)]">Role</dt>
-            <dd className="font-medium text-white">{admin?.role}</dd>
+            <dd className="font-medium text-white">
+              {admin?.role === "SUPER_ADMIN" ? "Super admin" : "Admin"}
+            </dd>
           </div>
         </dl>
       </section>
@@ -109,11 +111,12 @@ export function AdminSettingsPage() {
         <ul className="mt-4 space-y-2 text-sm text-[var(--muted)]">
           <li>
             <span className="text-white">ADMIN</span> — approvals, payments,
-            subscriptions, tenants (suspend/activate), announcements, activity
+            subscriptions, restaurants (suspend/activate), announcements,
+            activity
           </li>
           <li>
             <span className="text-white">SUPER_ADMIN</span> — everything above,
-            plus plan edits, tenant delete, and ops jobs (backup / alerts /
+            plus plan edits, restaurant delete, and ops jobs (backup / alerts /
             retention)
           </li>
         </ul>
@@ -130,7 +133,7 @@ export function AdminSettingsPage() {
             </h2>
             <p className="mt-1 text-sm text-[var(--muted)]">
               {isSuperAdmin
-                ? "Create and review recent database backups. Automatic backups run on a daily schedule."
+                ? "Create and review recent database backups. Automatic backups run daily."
                 : "Backup listing and manual runs are restricted to Super Admin."}
             </p>
           </div>
