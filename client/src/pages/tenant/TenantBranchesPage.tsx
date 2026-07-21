@@ -7,7 +7,6 @@ import { useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
-import { BackButton } from "../../components/BackButton";
 
 type BranchRow = {
   id: string;
@@ -197,7 +196,6 @@ export function TenantBranchesPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <BackButton fallbackTo="/tenant" className="mb-3" />
           <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
             Locations
           </p>

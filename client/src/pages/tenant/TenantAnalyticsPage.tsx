@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { Link } from "react-router-dom";
-import { BackButton } from "../../components/BackButton";
 import { ChartCard, KpiCard } from "../../components/charts/ChartCard";
 import {
   ComparisonBarChart,
@@ -56,7 +55,6 @@ export function TenantAnalyticsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <BackButton fallbackTo="/tenant" className="mb-3" />
         <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
           Insights
         </p>
