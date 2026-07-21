@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { chartTheme } from "./chart-theme";
 
 export function ChartCard({
   title,
@@ -52,26 +53,48 @@ export function ChartLoading({ label = "Loading chart…" }: { label?: string })
   );
 }
 
+type KpiAccent = "primary" | "secondary" | "accent" | "success" | "warning" | "danger";
+
+const KPI_ACCENTS: Record<KpiAccent, string> = {
+  primary: chartTheme.primary,
+  secondary: chartTheme.secondary,
+  accent: chartTheme.accent,
+  success: chartTheme.success,
+  warning: chartTheme.warning,
+  danger: chartTheme.danger,
+};
+
 export function KpiCard({
   label,
   value,
   hint,
   emphasize,
+  accent = "primary",
 }: {
   label: string;
   value: string | number;
   hint?: string;
   emphasize?: boolean;
+  accent?: KpiAccent;
 }) {
+  const accentColor = KPI_ACCENTS[accent];
+
   return (
     <div
       className={[
-        "rounded-[1.75rem] border p-5",
+        "relative overflow-hidden rounded-[1.75rem] border p-5",
         emphasize
-          ? "border-[var(--gold)]/40 bg-[linear-gradient(135deg,rgba(212,165,116,0.16),rgba(18,26,23,0.95)_45%)]"
+          ? "border-white/15 bg-[linear-gradient(145deg,rgba(91,141,239,0.16),rgba(18,26,23,0.96)_50%)]"
           : "border-[var(--line)] bg-[var(--panel)]",
       ].join(" ")}
     >
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-1"
+        style={{
+          background: `linear-gradient(90deg, ${accentColor}, transparent 85%)`,
+        }}
+      />
       <p className="text-sm text-[var(--muted)]">{label}</p>
       <p className="mt-2 font-[family-name:var(--font-display)] text-4xl text-white">
         {value}
