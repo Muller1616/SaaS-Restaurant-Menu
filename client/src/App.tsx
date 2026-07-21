@@ -9,6 +9,7 @@ import {
 import { AdminAuthProvider } from "./features/admin/AdminAuthContext";
 import { AdminLayout } from "./features/admin/AdminLayout";
 import { RequireAdminAuth } from "./features/admin/RequireAdminAuth";
+import { NavigationHistoryProvider } from "./features/navigation/NavigationHistoryContext";
 import { RequireTenantAuth } from "./features/tenant/RequireTenantAuth";
 import { TenantAuthProvider } from "./features/tenant/TenantAuthContext";
 import { TenantLayout } from "./features/tenant/TenantLayout";
@@ -63,84 +64,86 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AdminAuthProvider>
-          <TenantAuthProvider>
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="/r/:tenantSlug" element={<PublicMenuPage />} />
-              <Route
-                path="/r/:tenantSlug/:branchSlug"
-                element={<PublicMenuPage />}
-              />
-              {/* FR-5.1 alias → canonical FR-10.1 /r/... */}
-              <Route path="/menu/:tenantSlug" element={<MenuPathAlias />} />
-              <Route
-                path="/menu/:tenantSlug/:branchSlug"
-                element={<MenuPathAlias />}
-              />
-
-              <Route path="/tenant/login" element={<TenantLoginPage />} />
-              <Route
-                path="/tenant/forgot-password"
-                element={<TenantForgotPasswordPage />}
-              />
-              <Route
-                path="/tenant/reset-password"
-                element={<TenantResetPasswordPage />}
-              />
-
-              <Route path="/tenant" element={<RequireTenantAuth />}>
+        <NavigationHistoryProvider>
+          <AdminAuthProvider>
+            <TenantAuthProvider>
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/register" element={<RegisterPage />} />
+                <Route path="/r/:tenantSlug" element={<PublicMenuPage />} />
                 <Route
-                  path="change-password"
-                  element={<TenantChangePasswordPage />}
+                  path="/r/:tenantSlug/:branchSlug"
+                  element={<PublicMenuPage />}
                 />
-                <Route element={<TenantLayout />}>
-                  <Route index element={<TenantDashboardPage />} />
-                  <Route path="branches" element={<TenantBranchesPage />} />
-                  <Route path="menu" element={<TenantMenuPage />} />
-                  <Route path="qr" element={<TenantQrPage />} />
-                  <Route path="analytics" element={<TenantAnalyticsPage />} />
+                {/* FR-5.1 alias → canonical FR-10.1 /r/... */}
+                <Route path="/menu/:tenantSlug" element={<MenuPathAlias />} />
+                <Route
+                  path="/menu/:tenantSlug/:branchSlug"
+                  element={<MenuPathAlias />}
+                />
+
+                <Route path="/tenant/login" element={<TenantLoginPage />} />
+                <Route
+                  path="/tenant/forgot-password"
+                  element={<TenantForgotPasswordPage />}
+                />
+                <Route
+                  path="/tenant/reset-password"
+                  element={<TenantResetPasswordPage />}
+                />
+
+                <Route path="/tenant" element={<RequireTenantAuth />}>
                   <Route
-                    path="subscription"
-                    element={<TenantSubscriptionPage />}
+                    path="change-password"
+                    element={<TenantChangePasswordPage />}
                   />
-                  <Route path="payments" element={<TenantPaymentsPage />} />
-                  <Route
-                    path="notifications"
-                    element={<TenantNotificationsPage />}
-                  />
-                  <Route path="settings" element={<TenantSettingsPage />} />
+                  <Route element={<TenantLayout />}>
+                    <Route index element={<TenantDashboardPage />} />
+                    <Route path="branches" element={<TenantBranchesPage />} />
+                    <Route path="menu" element={<TenantMenuPage />} />
+                    <Route path="qr" element={<TenantQrPage />} />
+                    <Route path="analytics" element={<TenantAnalyticsPage />} />
+                    <Route
+                      path="subscription"
+                      element={<TenantSubscriptionPage />}
+                    />
+                    <Route path="payments" element={<TenantPaymentsPage />} />
+                    <Route
+                      path="notifications"
+                      element={<TenantNotificationsPage />}
+                    />
+                    <Route path="settings" element={<TenantSettingsPage />} />
+                  </Route>
                 </Route>
-              </Route>
 
-              <Route path="/admin/login" element={<AdminLoginPage />} />
+                <Route path="/admin/login" element={<AdminLoginPage />} />
 
-              <Route path="/admin" element={<RequireAdminAuth />}>
-                <Route element={<AdminLayout />}>
-                  <Route index element={<AdminDashboardPage />} />
-                  <Route path="tenants" element={<AdminTenantsPage />} />
-                  <Route path="branches" element={<AdminBranchesPage />} />
-                  <Route path="approvals" element={<AdminApprovalsPage />} />
-                  <Route
-                    path="subscriptions"
-                    element={<AdminSubscriptionsPage />}
-                  />
-                  <Route path="payments" element={<AdminPaymentsPage />} />
-                  <Route path="plans" element={<AdminPlansPage />} />
-                  <Route
-                    path="notifications"
-                    element={<AdminNotificationsPage />}
-                  />
-                  <Route path="activity" element={<AdminActivityPage />} />
-                  <Route path="settings" element={<AdminSettingsPage />} />
+                <Route path="/admin" element={<RequireAdminAuth />}>
+                  <Route element={<AdminLayout />}>
+                    <Route index element={<AdminDashboardPage />} />
+                    <Route path="tenants" element={<AdminTenantsPage />} />
+                    <Route path="branches" element={<AdminBranchesPage />} />
+                    <Route path="approvals" element={<AdminApprovalsPage />} />
+                    <Route
+                      path="subscriptions"
+                      element={<AdminSubscriptionsPage />}
+                    />
+                    <Route path="payments" element={<AdminPaymentsPage />} />
+                    <Route path="plans" element={<AdminPlansPage />} />
+                    <Route
+                      path="notifications"
+                      element={<AdminNotificationsPage />}
+                    />
+                    <Route path="activity" element={<AdminActivityPage />} />
+                    <Route path="settings" element={<AdminSettingsPage />} />
+                  </Route>
                 </Route>
-              </Route>
 
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </TenantAuthProvider>
-        </AdminAuthProvider>
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </TenantAuthProvider>
+          </AdminAuthProvider>
+        </NavigationHistoryProvider>
       </BrowserRouter>
     </QueryClientProvider>
   );
