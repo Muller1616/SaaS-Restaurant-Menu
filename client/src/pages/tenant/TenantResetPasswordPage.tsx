@@ -34,7 +34,7 @@ export function TenantResetPasswordPage() {
 
   async function onSubmit(values: FormValues) {
     if (!token) {
-      setError("root", { message: "Reset token is missing" });
+      setError("root", { message: "This reset link is missing or incomplete. Please request a new one." });
       return;
     }
     try {

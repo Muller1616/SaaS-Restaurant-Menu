@@ -9,6 +9,11 @@ import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
 import { validateDeviceImage } from "../../lib/device-image";
 import { formatEtb } from "../../lib/plans";
+import {
+  paymentMethodLabel,
+  subscriptionEventLabel,
+  subscriptionStatusLabel,
+} from "../../lib/status-labels";
 
 type RenewalOption = {
   months: number;
@@ -132,7 +137,9 @@ export function TenantSubscriptionPage() {
         referenceNumber: "",
         notes: "",
       });
-      setNotice("Payment submitted. Waiting for admin approval.");
+      setNotice(
+        "Payment submitted — we'll confirm it once an admin reviews the proof.",
+      );
       await queryClient.invalidateQueries({ queryKey: ["tenant", "subscription"] });
       await queryClient.invalidateQueries({
         queryKey: ["tenant", "subscription-history"],
@@ -142,10 +149,11 @@ export function TenantSubscriptionPage() {
     onError: (err) => {
       setError(
         axios.isAxiosError(err)
-          ? (err.response?.data?.message as string) || "Renewal failed"
+          ? (err.response?.data?.message as string) ||
+              "Couldn't submit renewal"
           : err instanceof Error
             ? err.message
-            : "Renewal failed",
+            : "Couldn't submit renewal",
       );
     },
   });
@@ -159,7 +167,7 @@ export function TenantSubscriptionPage() {
     },
     onSuccess: async () => {
       setNotice(
-        "Subscription cancelled. Menu data is retained for 30 days, then removed.",
+        "Plan cancelled. Your menu data stays available for 30 days, then is removed.",
       );
       await queryClient.invalidateQueries({ queryKey: ["tenant", "subscription"] });
       await queryClient.invalidateQueries({
@@ -169,8 +177,9 @@ export function TenantSubscriptionPage() {
     onError: (err) =>
       setError(
         axios.isAxiosError(err)
-          ? (err.response?.data?.message as string) || "Cancel failed"
-          : "Cancel failed",
+          ? (err.response?.data?.message as string) ||
+              "Couldn't cancel subscription"
+          : "Couldn't cancel subscription",
       ),
   });
 
@@ -192,8 +201,8 @@ export function TenantSubscriptionPage() {
           Subscription
         </h2>
         <p className="mt-2 text-[var(--muted)]">
-          Plan status for the selected branch. Renew before expiry to keep the
-          public menu live. Cancelled plans keep data for 30 days.
+          See your branch plan at a glance. Renew before expiry to keep the
+          public menu live; cancelled plans keep data for 30 days.
         </p>
       </div>
 
@@ -223,7 +232,7 @@ export function TenantSubscriptionPage() {
               <Stat label="Plan" value={query.data.plan.name} />
               <Stat
                 label="Status"
-                value={status.replaceAll("_", " ")}
+                value={subscriptionStatusLabel(status)}
                 className={statusTone}
               />
               <Stat
@@ -343,7 +352,7 @@ export function TenantSubscriptionPage() {
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-semibold text-[var(--gold-soft)]">
-                    {event.kind.replaceAll("_", " ")}
+                    {subscriptionEventLabel(event.kind)}
                   </span>
                   <span className="text-xs text-[var(--muted)]">
                     {new Date(event.createdAt).toLocaleString()}
@@ -428,9 +437,13 @@ export function TenantSubscriptionPage() {
                   className="field"
                   {...form.register("paymentMethod")}
                 >
-                  <option value="BANK_TRANSFER">Bank Transfer</option>
-                  <option value="TELEBIRR">Telebirr</option>
-                  <option value="CASH">Cash</option>
+                  <option value="BANK_TRANSFER">
+                    {paymentMethodLabel("BANK_TRANSFER")}
+                  </option>
+                  <option value="TELEBIRR">
+                    {paymentMethodLabel("TELEBIRR")}
+                  </option>
+                  <option value="CASH">{paymentMethodLabel("CASH")}</option>
                 </select>
               </label>
 

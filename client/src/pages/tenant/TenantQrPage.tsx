@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
+import { subscriptionStatusLabel } from "../../lib/status-labels";
 
 type QrPayload = {
   branchId: string;
@@ -91,7 +92,7 @@ export function TenantQrPage() {
     },
     onSuccess: async () => {
       setCacheBust(Date.now());
-      setNotice("QR code regenerated for the current menu URL.");
+      setNotice("QR code refreshed for the current menu URL.");
       setError(null);
       await queryClient.invalidateQueries({ queryKey: ["tenant", "qr"] });
       await queryClient.invalidateQueries({ queryKey: ["tenant", "dashboard"] });
@@ -242,12 +243,16 @@ export function TenantQrPage() {
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-[var(--muted)]">
                 <p className="font-medium text-white">Tips</p>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
-                  <li>Regenerate after renaming a branch (slug/URL change).</li>
+                  <li>
+                    Refresh the QR after renaming a branch (slug or URL change).
+                  </li>
                   <li>Print uses an A4 layout with restaurant + branch name.</li>
                   <li>
-                    Subscription status:{" "}
+                    Plan status:{" "}
                     <span className="text-[var(--gold-soft)]">
-                      {qr.data.subscriptionStatus ?? "—"}
+                      {subscriptionStatusLabel(
+                        qr.data.subscriptionStatus ?? "NO_SUBSCRIPTION",
+                      )}
                     </span>
                   </li>
                 </ul>
