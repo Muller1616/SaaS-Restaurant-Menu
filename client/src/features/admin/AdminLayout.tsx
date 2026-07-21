@@ -119,7 +119,10 @@ export function AdminLayout() {
             ))}
           </nav>
 
-          <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 lg:px-8">
+          <main
+            data-scroll-root
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 lg:px-8"
+          >
             <Outlet />
           </main>
         </div>

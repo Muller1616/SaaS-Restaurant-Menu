@@ -13,10 +13,13 @@ import {
   useNavigate,
   useNavigationType,
 } from "react-router-dom";
+import { scrollAppToTop } from "../../lib/scroll-to-top";
 
 type NavigationHistoryApi = {
   canGoBack: boolean;
   goBack: (fallbackTo: string) => void;
+  /** Mark the next route change to open at scroll top (used by BackButton). */
+  requestScrollToTop: () => void;
 };
 
 const NavigationHistoryContext = createContext<NavigationHistoryApi | null>(
@@ -40,6 +43,7 @@ export function NavigationHistoryProvider({
   const navigate = useNavigate();
   const navigationType = useNavigationType();
   const stackRef = useRef<string[]>([]);
+  const pendingScrollTopRef = useRef(false);
   const [stackSize, setStackSize] = useState(0);
 
   useLayoutEffect(() => {
@@ -66,8 +70,34 @@ export function NavigationHistoryProvider({
     setStackSize(next.length);
   }, [location.pathname, location.search, navigationType]);
 
+  // After Back Arrow navigation, pin the destination at the top before paint
+  // and again shortly after to beat browser scroll restoration on POP.
+  useLayoutEffect(() => {
+    if (!pendingScrollTopRef.current) return;
+
+    scrollAppToTop();
+
+    const frame = window.requestAnimationFrame(() => {
+      scrollAppToTop();
+      pendingScrollTopRef.current = false;
+    });
+    const timeout = window.setTimeout(() => {
+      scrollAppToTop();
+    }, 0);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timeout);
+    };
+  }, [location.pathname, location.search]);
+
+  const requestScrollToTop = useCallback(() => {
+    pendingScrollTopRef.current = true;
+  }, []);
+
   const goBack = useCallback(
     (fallbackTo: string) => {
+      pendingScrollTopRef.current = true;
       if (stackRef.current.length > 1) {
         navigate(-1);
         return;
@@ -82,8 +112,9 @@ export function NavigationHistoryProvider({
     () => ({
       canGoBack: stackSize > 1,
       goBack,
+      requestScrollToTop,
     }),
-    [goBack, stackSize],
+    [goBack, requestScrollToTop, stackSize],
   );
 
   return (
