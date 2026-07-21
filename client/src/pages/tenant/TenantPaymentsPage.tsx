@@ -1,8 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { StatusIndicator } from "../../components/charts/StatusIndicator";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
 import { formatEtb } from "../../lib/plans";
+import {
+  paymentMethodLabel,
+  paymentStatusLabel,
+} from "../../lib/status-labels";
 
 type PaymentRow = {
   id: string;
@@ -34,10 +39,10 @@ export function TenantPaymentsPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
-            Ledger
+            Payments
           </p>
           <h2 className="font-[family-name:var(--font-display)] text-4xl text-white">
-            Payments
+            Payment history
           </h2>
           <p className="mt-2 text-[var(--muted)]">
             Track renewal submissions for the selected branch.
@@ -85,7 +90,7 @@ export function TenantPaymentsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    {payment.paymentMethod}
+                    {paymentMethodLabel(payment.paymentMethod)}
                     <span className="block text-xs text-[var(--muted)]">
                       {payment.referenceNumber}
                     </span>
@@ -119,15 +124,9 @@ export function TenantPaymentsPage() {
 }
 
 function Status({ status }: { status: string }) {
-  const tone =
-    status === "APPROVED"
-      ? "bg-[rgba(61,186,138,0.15)] text-[var(--success)]"
-      : status === "REJECTED"
-        ? "bg-[rgba(255,107,107,0.12)] text-[var(--danger)]"
-        : "bg-[rgba(212,165,116,0.15)] text-[var(--gold-soft)]";
   return (
-    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${tone}`}>
-      {status}
-    </span>
+    <StatusIndicator status={status}>
+      {paymentStatusLabel(status)}
+    </StatusIndicator>
   );
 }

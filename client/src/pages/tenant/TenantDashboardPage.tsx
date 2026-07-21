@@ -2,8 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { ChartCard, KpiCard } from "../../components/charts/ChartCard";
 import { TrendAreaChart } from "../../components/charts/Charts";
+import { chartTheme } from "../../components/charts/chart-theme";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
+import { subscriptionStatusLabel } from "../../lib/status-labels";
 
 type DashboardData = {
   businessName: string;
@@ -91,20 +93,27 @@ export function TenantDashboardPage() {
               label="Current branch"
               value={branch?.name ?? "—"}
               hint={branch?.location}
+              accent="primary"
             />
             <KpiCard
               label="Subscription"
-              value={branch?.subscription?.status ?? "—"}
+              value={
+                branch?.subscription?.status
+                  ? subscriptionStatusLabel(branch.subscription.status)
+                  : subscriptionStatusLabel("NO_SUBSCRIPTION")
+              }
               hint={
                 branch?.subscription?.expiryDate
                   ? `Expires ${new Date(branch.subscription.expiryDate).toLocaleDateString()}`
                   : "No expiry"
               }
+              accent="accent"
             />
             <KpiCard
               label="Branches"
               value={dashboard.data.stats.branches}
               hint={`Plan: ${dashboard.data.plan.name}`}
+              accent="secondary"
             />
             <KpiCard
               label="Menu items"
@@ -114,6 +123,7 @@ export function TenantDashboardPage() {
                   ? "Unlimited on your plan"
                   : `Limit ${dashboard.data.plan.maxItems}`
               }
+              accent="success"
             />
           </div>
 
@@ -124,14 +134,17 @@ export function TenantDashboardPage() {
                   label="Views today"
                   value={dashboard.data.viewSnapshot.today}
                   emphasize
+                  accent="primary"
                 />
                 <KpiCard
                   label="Views last 7 days"
                   value={dashboard.data.viewSnapshot.last7Days}
+                  accent="secondary"
                 />
                 <Link
                   to="/tenant/analytics"
-                  className="inline-flex items-center justify-center rounded-full border border-white/15 px-4 py-2.5 text-sm text-white hover:border-[var(--gold)] hover:text-[var(--gold-soft)]"
+                  className="inline-flex items-center justify-center rounded-full border border-white/15 px-4 py-2.5 text-sm text-white transition hover:border-[rgba(91,141,239,0.55)]"
+                  style={{ color: chartTheme.primarySoft }}
                 >
                   Open full analytics
                 </Link>
@@ -145,6 +158,7 @@ export function TenantDashboardPage() {
                   xKey="date"
                   yKey="views"
                   yLabel="Views"
+                  color={chartTheme.primary}
                   emptyMessage="No scans yet — share your QR to see live traffic."
                 />
               </ChartCard>

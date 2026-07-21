@@ -8,6 +8,7 @@ import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
 import { validateDeviceImage } from "../../lib/device-image";
 import { formatEtb } from "../../lib/plans";
+import { subscriptionStatusLabel } from "../../lib/status-labels";
 
 type MenuItem = {
   id: string;
@@ -307,8 +308,8 @@ export function TenantMenuPage() {
 
       {menu.data && !menu.data.canEdit && (
         <div className="rounded-2xl border border-[var(--danger)]/30 bg-[rgba(255,107,107,0.1)] px-4 py-3 text-sm text-[var(--danger)]">
-          Subscription status is {menu.data.subscriptionStatus}. Menu is read-only
-          until renewed.
+          Your plan is {subscriptionStatusLabel(menu.data.subscriptionStatus)}.
+          Menu editing is locked until you renew.
         </div>
       )}
       {menu.data && !menu.data.canAddItem && menu.data.canEdit && (

@@ -5,8 +5,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { useSearchParams } from "react-router-dom";
 import { z } from "zod";
+import { StatusIndicator } from "../../components/charts/StatusIndicator";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
+import { subscriptionStatusLabel } from "../../lib/status-labels";
 
 type BranchRow = {
   id: string;
@@ -203,7 +205,7 @@ export function TenantBranchesPage() {
             Branches
           </h2>
           <p className="mt-2 text-[var(--muted)]">
-            Each branch has its own menu, QR code, and subscription. Plan limit:{" "}
+            Each location has its own menu, QR code, and plan. Your limit:{" "}
             <span className="text-[var(--gold-soft)]">{limitLabel}</span>
             {query.data ? ` · ${query.data.plan.name}` : ""}.
           </p>
@@ -408,17 +410,13 @@ export function TenantBranchesPage() {
 }
 
 function StatusPill({ status }: { status: string }) {
-  const tone =
-    status === "ACTIVE"
-      ? "bg-[rgba(61,186,138,0.15)] text-[var(--success)]"
-      : status === "EXPIRED"
-        ? "bg-[rgba(255,107,107,0.12)] text-[var(--danger)]"
-        : "bg-white/10 text-[var(--muted)]";
-
+  const key = status === "—" ? "NO_SUBSCRIPTION" : status;
   return (
-    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${tone}`}>
-      {status}
-    </span>
+    <StatusIndicator status={key}>
+      {status === "—"
+        ? subscriptionStatusLabel("NO_SUBSCRIPTION")
+        : subscriptionStatusLabel(status)}
+    </StatusIndicator>
   );
 }
 

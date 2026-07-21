@@ -62,8 +62,10 @@ export function TenantNotificationsPage() {
             Notifications
           </h2>
           <p className="mt-2 text-[var(--muted)]">
-            Updates for {tenant?.businessName}.{" "}
-            <span className="text-[var(--gold-soft)]">{unread} unread</span>
+            Messages and updates for {tenant?.businessName}.{" "}
+            <span className="text-[var(--gold-soft)]">
+              {unread} unread
+            </span>
           </p>
         </div>
         <div className="flex gap-2">
@@ -72,7 +74,7 @@ export function TenantNotificationsPage() {
             onClick={() => markAll.mutate()}
             className="rounded-full border border-white/15 px-4 py-2 text-sm"
           >
-            Mark all read
+            Mark all as read
           </button>
           <Link
             to="/tenant/settings"
@@ -86,7 +88,8 @@ export function TenantNotificationsPage() {
       {query.isLoading && <p className="text-[var(--muted)]">Loading…</p>}
       {query.data?.length === 0 && (
         <div className="rounded-[1.75rem] border border-dashed border-white/15 px-6 py-14 text-center text-[var(--muted)]">
-          No notifications yet.
+          Your inbox is empty. Updates about your plan and account will show up
+          here.
         </div>
       )}
 

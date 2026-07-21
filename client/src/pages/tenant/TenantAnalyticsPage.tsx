@@ -7,6 +7,7 @@ import {
   DistributionDonutChart,
   TrendAreaChart,
 } from "../../components/charts/Charts";
+import { chartTheme } from "../../components/charts/chart-theme";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
 
@@ -71,7 +72,7 @@ export function TenantAnalyticsPage() {
             ? "Full plan: 30-day trends, hour-of-day, and device mix."
             : analyticsLevel === "basic"
               ? "Basic plan: 7-day trends."
-              : "Upgrade to Basic or higher to unlock."}{" "}
+              : "Upgrade to Basic or higher to unlock guest scan insights."}{" "}
           Auto-refreshes every 30 seconds.
         </p>
       </div>
@@ -79,17 +80,17 @@ export function TenantAnalyticsPage() {
       {locked && (
         <section className="rounded-[2rem] border border-[var(--line)] bg-[var(--panel)] p-6">
           <h3 className="font-[family-name:var(--font-display)] text-3xl text-white">
-            Analytics locked
+            Analytics locked on Free
           </h3>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            Free plans do not include analytics. Upgrade to Basic for 7-day
-            views, or Popular/Premium for 30-day + hour breakdown.
+            Upgrade to Basic for 7-day views, or Popular / Premium for 30-day
+            trends plus hour and device breakdowns.
           </p>
           <Link
             to="/tenant/subscription"
             className="mt-5 inline-flex rounded-full bg-[var(--gold)] px-5 py-2.5 text-sm font-bold text-[var(--night)]"
           >
-            View subscription plans
+            View plans
           </Link>
         </section>
       )}
@@ -107,20 +108,41 @@ export function TenantAnalyticsPage() {
       {query.data && (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <KpiCard label="Today" value={query.data.totals.today} />
-            <KpiCard label="Last 7 days" value={query.data.totals.last7Days} />
+            <KpiCard
+              label="Today"
+              value={query.data.totals.today}
+              accent="primary"
+              emphasize
+            />
+            <KpiCard
+              label="Last 7 days"
+              value={query.data.totals.last7Days}
+              accent="secondary"
+            />
             <KpiCard
               label={`${query.data.totals.windowDays}-day total`}
               value={query.data.totals.windowTotal}
+              accent="accent"
             />
-            <KpiCard label="All time" value={query.data.totals.allTime} />
+            <KpiCard
+              label="All time"
+              value={query.data.totals.allTime}
+              accent="success"
+            />
           </div>
 
           <ChartCard
             title="Daily views"
             subtitle={`Peak ${query.data.peakDay.date}: ${query.data.peakDay.views} · avg ${query.data.totals.avgPerDay}/day`}
             action={
-              <span className="rounded-full border border-white/15 px-3 py-1 text-xs uppercase tracking-wide text-[var(--gold)]">
+              <span
+                className="rounded-full border px-3 py-1 text-xs uppercase tracking-wide"
+                style={{
+                  borderColor: "rgba(91,141,239,0.35)",
+                  color: chartTheme.primarySoft,
+                  background: "rgba(91,141,239,0.12)",
+                }}
+              >
                 {query.data.tier}
               </span>
             }
@@ -130,6 +152,7 @@ export function TenantAnalyticsPage() {
               xKey="date"
               yKey="views"
               yLabel="Views"
+              color={chartTheme.primary}
               emptyMessage="No guest views in this window yet. Share your QR to start collecting scans."
             />
           </ChartCard>
@@ -148,6 +171,7 @@ export function TenantAnalyticsPage() {
                   xKey="hour"
                   yKey="views"
                   yLabel="Views"
+                  color={chartTheme.secondary}
                   emptyMessage="No hourly data yet."
                 />
               </ChartCard>
