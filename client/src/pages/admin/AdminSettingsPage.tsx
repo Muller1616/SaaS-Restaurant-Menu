@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useState } from "react";
+import { BackButton } from "../../components/BackButton";
 import { useAdminAuth } from "../../features/admin/AdminAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
 
@@ -68,6 +69,7 @@ export function AdminSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
+        <BackButton fallbackTo="/admin" className="mb-3" />
         <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
           Admin console
         </p>

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useState } from "react";
 import { AdminPagination } from "../../components/AdminPagination";
+import { BackButton } from "../../components/BackButton";
 import { api, type ApiSuccess } from "../../lib/api";
 import { formatEtb } from "../../lib/plans";
 
@@ -133,7 +134,8 @@ export function AdminSubscriptionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
+          <BackButton fallbackTo="/admin" className="mb-3" />
+          <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
           Billing lifecycle
         </p>
         <h1 className="font-[family-name:var(--font-display)] text-3xl text-white">
