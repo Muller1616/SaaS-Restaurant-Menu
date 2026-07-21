@@ -1,9 +1,10 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
 import { useForm } from "react-hook-form";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
+import { SESSION_IDLE_MESSAGE } from "../../lib/session-timeout-config";
 
 const loginSchema = z.object({
   email: z.email("Enter a valid email"),
@@ -17,6 +18,8 @@ export function TenantLoginPage() {
   const { login, isAuthenticated, tenant } = useTenantAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const idleExpired = searchParams.get("reason") === "idle";
   const from =
     (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ??
     "/tenant";
@@ -92,6 +95,15 @@ export function TenantLoginPage() {
           <p className="mt-2 text-sm text-[var(--muted)]">
             Use the credentials from your approval email.
           </p>
+
+          {idleExpired && (
+            <div
+              role="status"
+              className="mt-5 rounded-2xl border border-[var(--gold)]/25 bg-[rgba(212,165,116,0.12)] px-4 py-3 text-sm text-[var(--gold-soft)]"
+            >
+              {SESSION_IDLE_MESSAGE}
+            </div>
+          )}
 
           <form className="mt-8 space-y-4" onSubmit={handleSubmit(onSubmit)}>
             <div>

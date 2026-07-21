@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { ChartCard, KpiCard } from "../../components/charts/ChartCard";
+import { TrendAreaChart } from "../../components/charts/Charts";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
 
@@ -27,9 +29,16 @@ type DashboardData = {
   } | null;
   stats: {
     branches: number;
+    menuItems: number;
     subscriptionStatus: string | null;
     planName: string;
   };
+  analyticsTier: "none" | "basic" | "full";
+  viewSnapshot: {
+    today: number;
+    last7Days: number;
+    daily: Array<{ date: string; views: number }>;
+  } | null;
 };
 
 async function fetchDashboard() {
@@ -42,6 +51,7 @@ export function TenantDashboardPage() {
   const dashboard = useQuery({
     queryKey: ["tenant", "dashboard", currentBranchId],
     queryFn: fetchDashboard,
+    refetchInterval: 60_000,
   });
 
   const branch = dashboard.data?.currentBranch;
@@ -76,13 +86,13 @@ export function TenantDashboardPage() {
 
       {dashboard.data && (
         <>
-          <div className="grid gap-4 md:grid-cols-3">
-            <StatCard
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <KpiCard
               label="Current branch"
               value={branch?.name ?? "—"}
               hint={branch?.location}
             />
-            <StatCard
+            <KpiCard
               label="Subscription"
               value={branch?.subscription?.status ?? "—"}
               hint={
@@ -91,12 +101,71 @@ export function TenantDashboardPage() {
                   : "No expiry"
               }
             />
-            <StatCard
+            <KpiCard
               label="Branches"
-              value={String(dashboard.data.stats.branches)}
+              value={dashboard.data.stats.branches}
               hint={`Plan: ${dashboard.data.plan.name}`}
             />
+            <KpiCard
+              label="Menu items"
+              value={dashboard.data.stats.menuItems}
+              hint={
+                dashboard.data.plan.maxItems == null
+                  ? "Unlimited on your plan"
+                  : `Limit ${dashboard.data.plan.maxItems}`
+              }
+            />
           </div>
+
+          {dashboard.data.viewSnapshot ? (
+            <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+                <KpiCard
+                  label="Views today"
+                  value={dashboard.data.viewSnapshot.today}
+                  emphasize
+                />
+                <KpiCard
+                  label="Views last 7 days"
+                  value={dashboard.data.viewSnapshot.last7Days}
+                />
+                <Link
+                  to="/tenant/analytics"
+                  className="inline-flex items-center justify-center rounded-full border border-white/15 px-4 py-2.5 text-sm text-white hover:border-[var(--gold)] hover:text-[var(--gold-soft)]"
+                >
+                  Open full analytics
+                </Link>
+              </div>
+              <ChartCard
+                title="Recent scans"
+                subtitle="Live menu views for this branch (last 7 days)"
+              >
+                <TrendAreaChart
+                  data={dashboard.data.viewSnapshot.daily}
+                  xKey="date"
+                  yKey="views"
+                  yLabel="Views"
+                  emptyMessage="No scans yet — share your QR to see live traffic."
+                />
+              </ChartCard>
+            </div>
+          ) : (
+            <section className="rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)] p-6">
+              <h3 className="font-[family-name:var(--font-display)] text-2xl text-white">
+                Analytics preview
+              </h3>
+              <p className="mt-2 text-sm text-[var(--muted)]">
+                Upgrade to Basic or higher to see live guest scan charts on this
+                dashboard.
+              </p>
+              <Link
+                to="/tenant/subscription"
+                className="mt-4 inline-flex rounded-full bg-[var(--gold)] px-5 py-2.5 text-sm font-bold text-[var(--night)]"
+              >
+                View plans
+              </Link>
+            </section>
+          )}
 
           <div className="grid gap-4 lg:grid-cols-2">
             <ActionCard
@@ -132,26 +201,6 @@ export function TenantDashboardPage() {
           )}
         </>
       )}
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string | null;
-}) {
-  return (
-    <div className="rounded-[1.5rem] border border-[var(--line)] bg-[var(--panel)] p-5">
-      <p className="text-sm text-[var(--muted)]">{label}</p>
-      <p className="mt-2 font-[family-name:var(--font-display)] text-3xl text-white">
-        {value}
-      </p>
-      {hint && <p className="mt-2 text-sm text-[var(--muted)]">{hint}</p>}
     </div>
   );
 }

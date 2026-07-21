@@ -1,9 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { Link } from "react-router-dom";
+import { BackButton } from "../../components/BackButton";
+import { ChartCard, KpiCard } from "../../components/charts/ChartCard";
+import {
+  ComparisonBarChart,
+  DistributionDonutChart,
+  TrendAreaChart,
+} from "../../components/charts/Charts";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
-import { BackButton } from "../../components/BackButton";
 
 type AnalyticsPayload = {
   tier: "basic" | "full";
@@ -19,6 +25,7 @@ type AnalyticsPayload = {
   peakDay: { date: string; views: number };
   daily: Array<{ date: string; views: number }>;
   byHour: Array<{ hour: number; views: number }> | null;
+  devices: Array<{ device: string; views: number }> | null;
 };
 
 async function fetchAnalytics() {
@@ -38,13 +45,8 @@ export function TenantAnalyticsPage() {
     queryFn: fetchAnalytics,
     enabled: Boolean(currentBranchId) && !locked,
     retry: false,
+    refetchInterval: locked ? false : 30_000,
   });
-
-  const maxDaily = Math.max(1, ...(query.data?.daily.map((d) => d.views) ?? [1]));
-  const maxHour = Math.max(
-    1,
-    ...(query.data?.byHour?.map((h) => h.views) ?? [1]),
-  );
 
   const lockedMessage = axios.isAxiosError(query.error)
     ? (query.error.response?.data?.message as string) ||
@@ -62,16 +64,17 @@ export function TenantAnalyticsPage() {
           Analytics
         </h2>
         <p className="mt-2 max-w-2xl text-[var(--muted)]">
-          Guest scans and menu opens for{" "}
+          Live guest scans for{" "}
           <span className="text-white">
             {query.data?.branch.name ?? "this branch"}
           </span>
           .{" "}
           {analyticsLevel === "full"
-            ? "Full plan: 30-day trends + hour-of-day."
+            ? "Full plan: 30-day trends, hour-of-day, and device mix."
             : analyticsLevel === "basic"
               ? "Basic plan: 7-day trends."
-              : "Upgrade to Basic or higher to unlock."}
+              : "Upgrade to Basic or higher to unlock."}{" "}
+          Auto-refreshes every 30 seconds.
         </p>
       </div>
 
@@ -106,96 +109,66 @@ export function TenantAnalyticsPage() {
       {query.data && (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="Today" value={query.data.totals.today} />
-            <StatCard label="Last 7 days" value={query.data.totals.last7Days} />
-            <StatCard
+            <KpiCard label="Today" value={query.data.totals.today} />
+            <KpiCard label="Last 7 days" value={query.data.totals.last7Days} />
+            <KpiCard
               label={`${query.data.totals.windowDays}-day total`}
               value={query.data.totals.windowTotal}
             />
-            <StatCard label="All time" value={query.data.totals.allTime} />
+            <KpiCard label="All time" value={query.data.totals.allTime} />
           </div>
 
-          <section className="rounded-[2rem] border border-[var(--line)] bg-[var(--panel)] p-6">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h3 className="font-[family-name:var(--font-display)] text-3xl text-white">
-                  Daily views
-                </h3>
-                <p className="mt-1 text-sm text-[var(--muted)]">
-                  Peak {query.data.peakDay.date}: {query.data.peakDay.views} ·
-                  avg {query.data.totals.avgPerDay}/day
-                </p>
-              </div>
+          <ChartCard
+            title="Daily views"
+            subtitle={`Peak ${query.data.peakDay.date}: ${query.data.peakDay.views} · avg ${query.data.totals.avgPerDay}/day`}
+            action={
               <span className="rounded-full border border-white/15 px-3 py-1 text-xs uppercase tracking-wide text-[var(--gold)]">
                 {query.data.tier}
               </span>
-            </div>
-
-            <div className="mt-6 flex h-48 items-end gap-1.5 sm:gap-2">
-              {query.data.daily.map((day) => (
-                <div
-                  key={day.date}
-                  className="flex min-w-0 flex-1 flex-col items-center gap-2"
-                  title={`${day.date}: ${day.views}`}
-                >
-                  <div
-                    className="w-full rounded-t-md bg-[linear-gradient(180deg,var(--gold-soft),var(--gold))]"
-                    style={{
-                      height: `${Math.max(4, (day.views / maxDaily) * 100)}%`,
-                    }}
-                  />
-                  <span className="truncate text-[10px] text-[var(--muted)]">
-                    {day.date.slice(5)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </section>
+            }
+          >
+            <TrendAreaChart
+              data={query.data.daily}
+              xKey="date"
+              yKey="views"
+              yLabel="Views"
+              emptyMessage="No guest views in this window yet. Share your QR to start collecting scans."
+            />
+          </ChartCard>
 
           {query.data.byHour && (
-            <section className="rounded-[2rem] border border-[var(--line)] bg-[var(--panel)] p-6">
-              <h3 className="font-[family-name:var(--font-display)] text-3xl text-white">
-                Views by hour (UTC)
-              </h3>
-              <p className="mt-1 text-sm text-[var(--muted)]">
-                Full analytics — when guests open your menu across the day.
-              </p>
-              <div className="mt-6 flex h-40 items-end gap-1">
-                {query.data.byHour.map((slot) => (
-                  <div
-                    key={slot.hour}
-                    className="flex min-w-0 flex-1 flex-col items-center gap-1"
-                    title={`${slot.hour}:00 — ${slot.views}`}
-                  >
-                    <div
-                      className="w-full rounded-t bg-[rgba(212,165,116,0.75)]"
-                      style={{
-                        height: `${Math.max(3, (slot.views / maxHour) * 100)}%`,
-                      }}
-                    />
-                    {slot.hour % 3 === 0 && (
-                      <span className="text-[9px] text-[var(--muted)]">
-                        {slot.hour}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
+            <div className="grid gap-4 xl:grid-cols-2">
+              <ChartCard
+                title="Views by hour (UTC)"
+                subtitle="When guests open your menu across the day"
+              >
+                <ComparisonBarChart
+                  data={query.data.byHour.map((slot) => ({
+                    hour: `${String(slot.hour).padStart(2, "0")}:00`,
+                    views: slot.views,
+                  }))}
+                  xKey="hour"
+                  yKey="views"
+                  yLabel="Views"
+                  emptyMessage="No hourly data yet."
+                />
+              </ChartCard>
+
+              <ChartCard
+                title="Devices"
+                subtitle="Guest device mix from recorded user agents"
+              >
+                <DistributionDonutChart
+                  data={query.data.devices ?? []}
+                  nameKey="device"
+                  valueKey="views"
+                  emptyMessage="Device breakdown will appear once guests scan your menu."
+                />
+              </ChartCard>
+            </div>
           )}
         </>
       )}
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)] p-5">
-      <p className="text-sm text-[var(--muted)]">{label}</p>
-      <p className="mt-2 font-[family-name:var(--font-display)] text-4xl text-white">
-        {value}
-      </p>
     </div>
   );
 }
