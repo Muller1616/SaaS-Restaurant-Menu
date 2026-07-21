@@ -6,10 +6,12 @@ import {
   type RefObject,
 } from "react";
 import { Link } from "react-router-dom";
-import heroImage from "../assets/hero.png";
 import { PublicNav } from "../components/PublicNav";
 import { api, type ApiSuccess } from "../lib/api";
 import { formatEtb, planLimitsLabel, type Plan } from "../lib/plans";
+
+const HERO_IMAGE =
+  "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=2000&q=80";
 
 async function fetchPlans() {
   const { data } = await api.get<ApiSuccess<Plan[]>>("/plans");
@@ -81,7 +83,7 @@ export function HomePage() {
         <div
           className="hero-ken-burns absolute inset-[-4%] bg-cover bg-center"
           style={{
-            backgroundImage: `linear-gradient(120deg, rgba(7,10,9,0.88), rgba(7,10,9,0.55) 45%, rgba(7,10,9,0.82)), url('${heroImage}')`,
+            backgroundImage: `linear-gradient(120deg, rgba(7,10,9,0.88), rgba(7,10,9,0.55) 45%, rgba(7,10,9,0.82)), url('${HERO_IMAGE}')`,
           }}
         />
         <div
