@@ -8,6 +8,7 @@ import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
 import { validateDeviceImage } from "../../lib/device-image";
 import { formatEtb } from "../../lib/plans";
+import { BackButton } from "../../components/BackButton";
 
 type MenuItem = {
   id: string;
@@ -257,6 +258,7 @@ export function TenantMenuPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
+          <BackButton fallbackTo="/tenant" className="mb-3" />
           <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
             {tenant?.businessName}
           </p>
