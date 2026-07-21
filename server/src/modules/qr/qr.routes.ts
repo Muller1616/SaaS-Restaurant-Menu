@@ -43,7 +43,7 @@ qrRouter.patch("/style", async (req: BranchAuthedRequest, res, next) => {
   try {
     const parsed = updateQrStyleSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      throw new AppError(400, "Validation failed", parsed.error.flatten());
+      throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
     }
     if (
       parsed.data.fgColor === undefined &&

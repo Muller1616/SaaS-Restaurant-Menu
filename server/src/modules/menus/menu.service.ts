@@ -377,7 +377,7 @@ export async function getPublicMenu(tenantSlug: string, branchSlug?: string) {
       reason: "suspended" as const,
       businessName: tenant.businessName,
       logoUrl: tenant.logoUrl,
-      message: "This restaurant is unavailable",
+      message: "This menu isn’t available right now",
       phone: null as string | null,
       location: tenant.businessLocation,
     };
