@@ -13,9 +13,12 @@ type Log = {
   id: string;
   userType: string;
   userId: string;
+  actorLabel: string;
   action: string;
   entityType: string;
   entityId: string | null;
+  entityLabel: string | null;
+  summary: string;
   details: unknown;
   createdAt: string;
 };
@@ -35,6 +38,16 @@ function entityTypeLabel(value: string) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function formatDetails(details: unknown) {
+  if (details == null) return "—";
+  if (typeof details === "string") return details;
+  try {
+    return JSON.stringify(details, null, 0);
+  } catch {
+    return "—";
+  }
+}
+
 async function fetchLogs(page: number) {
   const { data } = await api.get<ApiSuccess<PageResult<Log>>>(
     "/admin/activity-logs",
@@ -50,7 +63,6 @@ export function AdminActivityPage() {
     queryFn: () => fetchLogs(page),
   });
 
-  // Keep current page in range when activities are added/removed.
   useEffect(() => {
     if (!query.data) return;
     if (page > query.data.totalPages) {
@@ -73,13 +85,14 @@ export function AdminActivityPage() {
       </div>
 
       <div className="overflow-x-auto overflow-hidden rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)]">
-        <table className="w-full min-w-[36rem] text-left text-sm">
+        <table className="w-full min-w-[48rem] text-left text-sm">
           <thead className="bg-[var(--panel-2)] text-[var(--muted)]">
             <tr>
               <th className="px-4 py-3">When</th>
+              <th className="px-4 py-3">Summary</th>
               <th className="px-4 py-3">Who</th>
               <th className="px-4 py-3">Action</th>
-              <th className="px-4 py-3">Entity</th>
+              <th className="px-4 py-3">Target</th>
             </tr>
           </thead>
           <tbody>
@@ -91,20 +104,28 @@ export function AdminActivityPage() {
                 <td className="px-4 py-3 whitespace-nowrap text-white/85">
                   {new Date(log.createdAt).toLocaleString()}
                 </td>
+                <td className="max-w-sm px-4 py-3 text-white">
+                  <p className="leading-snug">
+                    {log.summary ||
+                      `${activityActorLabel(log.userType)} · ${activityActionLabel(log.action)}`}
+                  </p>
+                  {log.details != null && (
+                    <p className="mt-1 truncate text-xs text-[var(--muted)]" title={formatDetails(log.details)}>
+                      {formatDetails(log.details)}
+                    </p>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-white">
-                  {activityActorLabel(log.userType)}
-                  <span className="block text-xs text-[var(--muted)]">
-                    {log.userId.slice(0, 10)}…
-                  </span>
+                  {log.actorLabel || activityActorLabel(log.userType)}
                 </td>
                 <td className="px-4 py-3 font-medium text-white">
                   {activityActionLabel(log.action)}
                 </td>
                 <td className="px-4 py-3 text-white">
-                  {entityTypeLabel(log.entityType)}
-                  {log.entityId && (
+                  <p>{log.entityLabel || entityTypeLabel(log.entityType)}</p>
+                  {log.entityLabel && (
                     <span className="block text-xs text-[var(--muted)]">
-                      {log.entityId.slice(0, 12)}…
+                      {entityTypeLabel(log.entityType)}
                     </span>
                   )}
                 </td>
@@ -119,7 +140,7 @@ export function AdminActivityPage() {
         )}
       </div>
 
-      {query.data && query.data.totalPages > 1 && (
+      {query.data && (
         <AdminPagination
           page={query.data.page}
           totalPages={query.data.totalPages}

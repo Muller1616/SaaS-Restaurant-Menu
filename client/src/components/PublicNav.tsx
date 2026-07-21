@@ -8,9 +8,6 @@ export function PublicNav() {
           <p className="text-[11px] tracking-[0.35em] text-[var(--gold)] uppercase">
             KitchenOS
           </p>
-          <p className="font-[family-name:var(--font-display)] text-2xl text-[var(--mist)] transition group-hover:text-[var(--gold-soft)]">
-            Menus that feel premium
-          </p>
         </Link>
         <div className="flex items-center gap-3">
           <Link
