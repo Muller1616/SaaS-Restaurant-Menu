@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { AdminPagination } from "../../components/AdminPagination";
-import { BackButton } from "../../components/BackButton";
 import { api, type ApiSuccess } from "../../lib/api";
 
 const ACTIVITY_PAGE_SIZE = 11;
@@ -51,7 +50,6 @@ export function AdminActivityPage() {
   return (
     <div className="space-y-6">
       <div>
-        <BackButton fallbackTo="/admin" className="mb-3" />
         <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
           Audit trail
         </p>
