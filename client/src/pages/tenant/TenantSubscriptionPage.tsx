@@ -9,7 +9,6 @@ import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
 import { validateDeviceImage } from "../../lib/device-image";
 import { formatEtb } from "../../lib/plans";
-import { BackButton } from "../../components/BackButton";
 
 type RenewalOption = {
   months: number;
@@ -186,7 +185,6 @@ export function TenantSubscriptionPage() {
   return (
     <div className="space-y-6">
       <div>
-        <BackButton fallbackTo="/tenant" className="mb-3" />
         <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
           Billing
         </p>
