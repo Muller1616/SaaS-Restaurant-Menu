@@ -36,7 +36,7 @@ tenantSettingsRouter.patch("/", async (req: AuthedRequest, res, next) => {
   try {
     const parsed = updateSettingsSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "Validation failed", parsed.error.flatten());
+      throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
     }
     const data = await updateTenantSettings(req.user!.sub, parsed.data);
     res.json({ success: true, data });

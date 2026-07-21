@@ -84,7 +84,7 @@ subscriptionRouter.post(
     try {
       const parsed = renewSchema.safeParse(req.body);
       if (!parsed.success) {
-        throw new AppError(400, "Validation failed", parsed.error.flatten());
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       if (!req.file?.filename) {
         throw new AppError(400, "Payment screenshot is required");
