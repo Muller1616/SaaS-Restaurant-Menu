@@ -17,7 +17,13 @@ import { scrollAppToTop } from "../../lib/scroll-to-top";
 
 type NavigationHistoryApi = {
   canGoBack: boolean;
-  goBack: (fallbackTo: string) => void;
+  goBack: (
+    fallbackTo: string,
+    options?: {
+      /** When previous entry matches, use fallback instead of history back. */
+      skipPrevious?: (previousKey: string) => boolean;
+    },
+  ) => void;
   /** Mark the next route change to open at scroll top (used by BackButton). */
   requestScrollToTop: () => void;
 };
@@ -96,9 +102,19 @@ export function NavigationHistoryProvider({
   }, []);
 
   const goBack = useCallback(
-    (fallbackTo: string) => {
+    (
+      fallbackTo: string,
+      options?: {
+        skipPrevious?: (previousKey: string) => boolean;
+      },
+    ) => {
       pendingScrollTopRef.current = true;
       if (stackRef.current.length > 1) {
+        const previous = stackRef.current[stackRef.current.length - 2] ?? "";
+        if (options?.skipPrevious?.(previous)) {
+          navigate(fallbackTo, { replace: true });
+          return;
+        }
         navigate(-1);
         return;
       }

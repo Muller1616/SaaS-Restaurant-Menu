@@ -11,11 +11,20 @@ type BackButtonProps = {
   title?: string;
   /** Custom handler; skips history / fallback navigation when provided. */
   onBack?: () => void;
+  /**
+   * When the previous history entry matches, navigate to `fallbackTo` instead.
+   * Useful on login pages to avoid returning to protected routes after logout.
+   */
+  skipHistoryWhenPreviousMatches?: (previousKey: string) => boolean;
   className?: string;
 };
 
 /**
- * Consistent back control: prefers in-app router history, otherwise `fallbackTo`.
+ * Consistent back control for nested / workflow pages only
+ * (e.g. register, forgot/reset password, future detail views).
+ * Do not place on dashboards or primary sidebar destinations.
+ *
+ * Prefers in-app router history, otherwise `fallbackTo`.
  * Always opens the destination at the top of the page.
  */
 export function BackButton({
@@ -23,6 +32,7 @@ export function BackButton({
   label = "Go back",
   title,
   onBack,
+  skipHistoryWhenPreviousMatches,
   className = "",
 }: BackButtonProps) {
   const navigate = useNavigate();
@@ -32,13 +42,13 @@ export function BackButton({
     if (onBack) {
       history?.requestScrollToTop();
       onBack();
-      // If onBack navigates synchronously, layout effect handles scroll;
-      // also scroll on next frame for same-route / delayed navigations.
       window.requestAnimationFrame(() => scrollAppToTop());
       return;
     }
     if (history) {
-      history.goBack(fallbackTo);
+      history.goBack(fallbackTo, {
+        skipPrevious: skipHistoryWhenPreviousMatches,
+      });
       return;
     }
     scrollAppToTop();
@@ -79,5 +89,15 @@ export function BackButton({
       </svg>
       {title ? <span className="pr-1 font-medium">{title}</span> : null}
     </button>
+  );
+}
+
+/** Previous entries that should not be restored from tenant auth screens. */
+export function isProtectedTenantHistoryKey(previousKey: string) {
+  if (!previousKey.startsWith("/tenant")) return false;
+  return !(
+    previousKey.startsWith("/tenant/login") ||
+    previousKey.startsWith("/tenant/forgot-password") ||
+    previousKey.startsWith("/tenant/reset-password")
   );
 }
