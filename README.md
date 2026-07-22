@@ -1,4 +1,5 @@
 # KitchenOS — QR Restaurant Menu SaaS
+<<<<<<< HEAD
 
 Multi-tenant QR restaurant menu platform (SRS v1.0).
 
@@ -81,3 +82,5 @@ npm run job:db-backup -w server
 | Storage | Local `uploads/` + Sharp → WebP |
 | Analytics | Implemented per plan feature flag |
 | TRIAL | 14 days on approval (FR-6.1) |
+=======
+>>>>>>> c8ed59ee2a48acb0d7aaf28acd772fb673cafd16
