@@ -3,6 +3,10 @@ import axios from "axios";
 import { useForm } from "react-hook-form";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
+import {
+  BackButton,
+  isProtectedTenantHistoryKey,
+} from "../../components/BackButton";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { SESSION_IDLE_MESSAGE } from "../../lib/session-timeout-config";
 
@@ -86,6 +90,12 @@ export function TenantLoginPage() {
         </section>
 
         <section className="p-8 sm:p-10">
+          <BackButton
+            fallbackTo="/"
+            label="Back to home"
+            className="mb-3"
+            skipHistoryWhenPreviousMatches={isProtectedTenantHistoryKey}
+          />
           <p className="text-[11px] tracking-[0.3em] text-[var(--gold)] uppercase lg:hidden">
             KitchenOS
           </p>
