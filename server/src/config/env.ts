@@ -12,21 +12,52 @@ function required(name: string): string {
   return value;
 }
 
+const nodeEnv = process.env.NODE_ENV ?? "development";
+const isProduction = nodeEnv === "production";
+
+const jwtSecret = required("JWT_SECRET");
+if (isProduction && jwtSecret.length < 32) {
+  throw new Error("JWT_SECRET must be at least 32 characters in production");
+}
+if (
+  isProduction &&
+  (jwtSecret.includes("dev-") || jwtSecret.includes("change-me"))
+) {
+  throw new Error("JWT_SECRET must not use a development placeholder in production");
+}
+
+const clientUrl = process.env.CLIENT_URL ?? "http://localhost:5173";
+const publicAppUrl = process.env.PUBLIC_APP_URL ?? "http://localhost:5173";
+if (
+  isProduction &&
+  (clientUrl.includes("localhost") || publicAppUrl.includes("localhost"))
+) {
+  throw new Error(
+    "CLIENT_URL and PUBLIC_APP_URL must be public HTTPS origins in production",
+  );
+}
+
+const smtpHost = process.env.SMTP_HOST ?? "localhost";
+if (isProduction && (smtpHost === "localhost" || smtpHost === "127.0.0.1")) {
+  throw new Error("SMTP_HOST must be a real mail provider in production");
+}
+
 export const env = {
-  nodeEnv: process.env.NODE_ENV ?? "development",
+  nodeEnv,
+  isProduction,
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: required("DATABASE_URL"),
-  jwtSecret: required("JWT_SECRET"),
+  jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "1d",
   jwtRememberExpiresIn: process.env.JWT_REMEMBER_EXPIRES_IN ?? "30d",
-  clientUrl: process.env.CLIENT_URL ?? "http://localhost:5173",
-  publicAppUrl: process.env.PUBLIC_APP_URL ?? "http://localhost:5173",
+  clientUrl,
+  publicAppUrl,
   uploadDir: path.resolve(
     path.join(__dirname, "../.."),
     process.env.UPLOAD_DIR ?? "uploads",
   ),
   smtp: {
-    host: process.env.SMTP_HOST ?? "localhost",
+    host: smtpHost,
     port: Number(process.env.SMTP_PORT ?? 1025),
     user: process.env.SMTP_USER ?? "",
     pass: process.env.SMTP_PASS ?? "",
@@ -45,4 +76,8 @@ export const env = {
   backupRetainDays: Number(process.env.BACKUP_RETAIN_DAYS ?? 14),
   /** Minimum hours between automatic backups (scheduler). */
   backupIntervalHours: Number(process.env.BACKUP_INTERVAL_HOURS ?? 24),
+  backupDockerContainer:
+    process.env.BACKUP_DOCKER_CONTAINER ?? "kitchenos-postgres",
+  backupPgUser: process.env.BACKUP_PGUSER ?? "kitchenos",
+  backupPgDatabase: process.env.BACKUP_PGDATABASE ?? "kitchenos",
 } as const;

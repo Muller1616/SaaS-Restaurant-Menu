@@ -63,6 +63,7 @@ const plans: Array<{
 ];
 
 async function main() {
+  const isProduction = process.env.NODE_ENV === "production";
   console.log("Seeding KitchenOS database...");
 
   for (const plan of plans) {
@@ -81,9 +82,15 @@ async function main() {
   }
 
   const adminEmail = process.env.ADMIN_EMAIL ?? "admin@kitchenos.local";
-  const adminPassword = process.env.ADMIN_PASSWORD ?? "Admin@12345";
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminPassword) {
+    if (isProduction) {
+      throw new Error("ADMIN_PASSWORD is required when seeding in production");
+    }
+  }
+  const resolvedAdminPassword = adminPassword ?? "Admin@12345";
   const adminName = process.env.ADMIN_NAME ?? "KitchenOS Admin";
-  const passwordHash = await bcrypt.hash(adminPassword, 10);
+  const passwordHash = await bcrypt.hash(resolvedAdminPassword, 10);
 
   await prisma.adminUser.upsert({
     where: { email: adminEmail },
@@ -102,8 +109,11 @@ async function main() {
 
   const staffEmail =
     process.env.STAFF_ADMIN_EMAIL ?? "staff@kitchenos.local";
-  const staffPassword =
-    process.env.STAFF_ADMIN_PASSWORD ?? "Staff@12345";
+  const staffPasswordEnv = process.env.STAFF_ADMIN_PASSWORD;
+  if (!staffPasswordEnv && isProduction) {
+    throw new Error("STAFF_ADMIN_PASSWORD is required when seeding in production");
+  }
+  const staffPassword = staffPasswordEnv ?? "Staff@12345";
   const staffName = process.env.STAFF_ADMIN_NAME ?? "KitchenOS Staff";
   const staffHash = await bcrypt.hash(staffPassword, 10);
 
@@ -126,8 +136,13 @@ async function main() {
   const adminCount = await prisma.adminUser.count();
 
   console.log(`Seed complete: ${planCount} plans, ${adminCount} admin user(s).`);
-  console.log(`Super admin: ${adminEmail} / ${adminPassword}`);
-  console.log(`Staff admin:  ${staffEmail} / ${staffPassword}`);
+  console.log(`Super admin email: ${adminEmail}`);
+  console.log(`Staff admin email:  ${staffEmail}`);
+  if (!isProduction) {
+    console.log(
+      "Dev note: default passwords apply only when ADMIN_PASSWORD / STAFF_ADMIN_PASSWORD are unset — never log them.",
+    );
+  }
 }
 
 main()

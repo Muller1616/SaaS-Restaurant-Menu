@@ -4,6 +4,7 @@ import {
   startSubscriptionAlertScheduler,
   stopSubscriptionAlertScheduler,
 } from "./jobs/scheduler.js";
+import { logger } from "./lib/logger.js";
 import { prisma } from "./lib/prisma.js";
 
 async function bootstrap() {
@@ -12,13 +13,15 @@ async function bootstrap() {
   const app = createApp();
 
   const server = app.listen(env.port, () => {
-    console.log(`KitchenOS API listening on http://localhost:${env.port}`);
-    console.log(`Health check: http://localhost:${env.port}/api/v1/health`);
+    logger.info("KitchenOS API listening", {
+      port: env.port,
+      env: env.nodeEnv,
+    });
     startSubscriptionAlertScheduler();
   });
 
   const shutdown = async (signal: string) => {
-    console.log(`Received ${signal}, shutting down…`);
+    logger.info("Shutting down", { signal });
     stopSubscriptionAlertScheduler();
     server.close(async () => {
       await prisma.$disconnect();
@@ -31,6 +34,6 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error) => {
-  console.error("Failed to start server:", error);
+  logger.error("Failed to start server", error);
   process.exit(1);
 });

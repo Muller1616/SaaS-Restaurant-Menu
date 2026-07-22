@@ -26,6 +26,11 @@ import { tenantRouter } from "./modules/tenant/tenant.routes.js";
 export function createApp() {
   const app = express();
 
+  // Correct client IPs / rate limits when behind Nginx or a load balancer
+  if (env.isProduction) {
+    app.set("trust proxy", 1);
+  }
+
   fs.mkdirSync(env.uploadDir, { recursive: true });
   fs.mkdirSync(path.join(env.uploadDir, "payments"), { recursive: true });
   fs.mkdirSync(path.join(env.uploadDir, "menu"), { recursive: true });
@@ -43,9 +48,21 @@ export function createApp() {
   app.use(cookieParser());
   app.use(express.json({ limit: "2mb" }));
   app.use(express.urlencoded({ extended: true }));
-  app.use("/uploads", express.static(env.uploadDir));
+
+  // Public media only — payment proofs are served via authenticated API routes
+  app.use("/uploads/logos", express.static(path.join(env.uploadDir, "logos")));
+  app.use("/uploads/menu", express.static(path.join(env.uploadDir, "menu")));
+  app.use("/uploads/qr", express.static(path.join(env.uploadDir, "qr")));
+  app.use("/uploads/payments", (_req, res) => {
+    res.status(401).json({
+      success: false,
+      message: "Payment proof requires authentication",
+    });
+  });
 
   app.use("/api/v1/health", healthRouter);
+  // Convenience alias for probes that hit /health instead of /api/v1/health
+  app.use("/health", healthRouter);
   app.use("/api/v1", csrfProtect);
   app.use("/api/v1/auth", authRouter);
   app.use("/api/v1", publicRouter);
