@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useMemo, useState } from "react";
 import { AdminPagination } from "../../components/AdminPagination";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useAdminAuth } from "../../features/admin/AdminAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
 import {
@@ -81,6 +82,7 @@ export function AdminTenantsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const list = useQuery({
     queryKey: ["admin", "tenants", status, plan, q, from, to, page],
@@ -359,15 +361,7 @@ export function AdminTenantsPage() {
                     {isSuperAdmin && (
                       <button
                         type="button"
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Delete ${detail.data.businessName}? This cannot be undone.`,
-                            )
-                          ) {
-                            remove.mutate();
-                          }
-                        }}
+                        onClick={() => setConfirmDelete(true)}
                         className="rounded-full border border-white/15 px-4 py-2 text-sm hover:border-[var(--gold)]"
                       >
                         Delete
@@ -380,6 +374,24 @@ export function AdminTenantsPage() {
           )}
         </aside>
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete && Boolean(detail.data)}
+        title="Delete restaurant"
+        message={
+          detail.data
+            ? `Delete ${detail.data.businessName}? This cannot be undone.`
+            : "Delete this restaurant?"
+        }
+        confirmLabel="Delete forever"
+        danger
+        busy={remove.isPending}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          remove.mutate();
+        }}
+      />
     </div>
   );
 }
