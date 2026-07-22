@@ -26,8 +26,13 @@ if (
   throw new Error("JWT_SECRET must not use a development placeholder in production");
 }
 
-const clientUrl = process.env.CLIENT_URL ?? "http://localhost:5173";
-const publicAppUrl = process.env.PUBLIC_APP_URL ?? "http://localhost:5173";
+const clientUrl = (process.env.CLIENT_URL ?? "http://localhost:5173").replace(
+  /\/$/,
+  "",
+);
+const publicAppUrl = (
+  process.env.PUBLIC_APP_URL ?? "http://localhost:5173"
+).replace(/\/$/, "");
 if (
   isProduction &&
   (clientUrl.includes("localhost") || publicAppUrl.includes("localhost"))
