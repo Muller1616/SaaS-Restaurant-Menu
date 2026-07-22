@@ -17,8 +17,9 @@ export function csrfTokenHandler(req: Request, res: Response) {
   const token = issueToken();
   res.cookie(CSRF_COOKIE, token, {
     httpOnly: false,
-    sameSite: "strict",
-    secure: env.nodeEnv === "production",
+    // Cross-site SPA (Vercel) → API (Render) needs SameSite=None in production.
+    sameSite: env.isProduction ? "none" : "strict",
+    secure: env.isProduction,
     path: "/",
   });
   res.json({ success: true, data: { csrfToken: token } });
