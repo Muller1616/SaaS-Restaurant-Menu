@@ -8,6 +8,7 @@ import {
   type BranchAuthedRequest,
 } from "../../middleware/branch-context.js";
 import { AppError } from "../../middleware/error.js";
+import { requirePasswordChanged } from "../../middleware/require-password-changed.js";
 import {
   buildPrintHtml,
   getBranchQr,
@@ -19,7 +20,7 @@ import {
 
 export const qrRouter = Router();
 
-qrRouter.use(requireAuth, requireTenant, requireBranchContext);
+qrRouter.use(requireAuth, requireTenant, requirePasswordChanged, requireBranchContext);
 
 qrRouter.get("/", async (req: BranchAuthedRequest, res, next) => {
   try {

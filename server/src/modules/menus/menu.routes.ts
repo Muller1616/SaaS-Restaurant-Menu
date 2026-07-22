@@ -10,6 +10,7 @@ import {
 } from "../../middleware/branch-context.js";
 import { AppError } from "../../middleware/error.js";
 import { optimizeRequestImage } from "../../middleware/optimize-upload.js";
+import { requirePasswordChanged } from "../../middleware/require-password-changed.js";
 import { menuUpload } from "../../middleware/upload.js";
 import {
   categorySchema,
@@ -25,7 +26,7 @@ import {
 
 export const menuRouter = Router();
 
-menuRouter.use(requireAuth, requireTenant, requireBranchContext);
+menuRouter.use(requireAuth, requireTenant, requirePasswordChanged, requireBranchContext);
 
 function handleUpload(
   req: BranchAuthedRequest,

@@ -15,7 +15,13 @@ export const categorySchema = z.object({
 
 export const menuItemSchema = z.object({
   name: z.string().trim().min(1, "Item name is required"),
-  description: z.string().trim().optional(),
+  /** Detailed food description: ingredients, sides, allergens, portion, etc. */
+  description: z
+    .string()
+    .trim()
+    .max(4000, "Keep the food description under 4000 characters")
+    .optional()
+    .transform((value) => (value && value.length > 0 ? value : undefined)),
   price: z.coerce.number().positive("Price must be greater than 0"),
   currency: z.string().trim().default("ETB"),
   categoryId: z.string().min(1, "Category is required"),
@@ -369,6 +375,19 @@ export async function getPublicMenu(tenantSlug: string, branchSlug?: string) {
 
   if (!tenant || tenant.status === "REJECTED") {
     throw new AppError(404, "Menu not found");
+  }
+
+  if (tenant.status === "PENDING_APPROVAL") {
+    return {
+      unavailable: true as const,
+      reason: "pending" as const,
+      businessName: tenant.businessName,
+      logoUrl: tenant.logoUrl,
+      message:
+        "This restaurant is still being set up. Please check back soon.",
+      phone: tenant.phone,
+      location: tenant.businessLocation,
+    };
   }
 
   if (tenant.status === "SUSPENDED") {
