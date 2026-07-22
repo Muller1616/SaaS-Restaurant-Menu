@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+import { FoodDescription } from "../components/FoodDescription";
 import { CallToOrderSheet } from "../features/public-menu/CallToOrderSheet";
 import { ShareMenuSheet } from "../features/public-menu/ShareMenuSheet";
 import { api, type ApiSuccess } from "../lib/api";
@@ -267,24 +268,27 @@ export function PublicMenuPage() {
                     />
                   )}
                   <div className="flex items-start justify-between gap-3 p-4">
-                    <div className="min-w-0">
-                      <h2 className="font-[family-name:var(--font-display)] text-2xl text-white">
-                        {item.name}
-                        {item.isFeatured && (
-                          <span className="ml-2 align-middle text-[10px] tracking-wide text-[var(--gold)] uppercase">
-                            Featured
-                          </span>
-                        )}
-                      </h2>
-                      {item.description && (
-                        <p className="mt-1 text-sm leading-relaxed text-[var(--muted)]">
-                          {item.description}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <h2 className="font-[family-name:var(--font-display)] text-2xl text-white">
+                          {item.name}
+                          {item.isFeatured && (
+                            <span className="ml-2 align-middle text-[10px] tracking-wide text-[var(--gold)] uppercase">
+                              Featured
+                            </span>
+                          )}
+                        </h2>
+                        <p className="shrink-0 font-semibold text-[var(--gold-soft)]">
+                          {formatEtb(item.price)}
                         </p>
+                      </div>
+                      {item.description && (
+                        <FoodDescription
+                          text={item.description}
+                          className="mt-3"
+                        />
                       )}
                     </div>
-                    <p className="shrink-0 font-semibold text-[var(--gold-soft)]">
-                      {formatEtb(item.price)}
-                    </p>
                   </div>
                 </article>
               ))}
