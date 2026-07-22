@@ -24,18 +24,28 @@ export function csrfTokenHandler(req: Request, res: Response) {
   res.json({ success: true, data: { csrfToken: token } });
 }
 
+/** Paths that issue CSRF tokens — must never require a token themselves. */
+function isCsrfBootstrapPath(req: Request) {
+  const path = req.path || "";
+  return (
+    path === "/auth/csrf" ||
+    path.endsWith("/auth/csrf") ||
+    // When mounted at /api/v1, Express may report the full path
+    path === "/api/v1/auth/csrf"
+  );
+}
+
 /**
  * SRS §6.2 CSRF protection for mutating API calls.
  * Double-submit: cookie must match X-CSRF-Token header.
  * Also rejects cross-site Origin/Referer when present.
  */
 export function csrfProtect(req: Request, _res: Response, next: NextFunction) {
-  if (SAFE_METHODS.has(req.method)) {
+  if (SAFE_METHODS.has(req.method) || isCsrfBootstrapPath(req)) {
     next();
     return;
   }
 
-  // CSRF bootstrap is GET-only; mutating calls still require the token.
   const origin = req.get("origin");
   const referer = req.get("referer");
   if (origin && origin !== env.clientUrl) {

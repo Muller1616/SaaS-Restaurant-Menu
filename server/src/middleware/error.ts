@@ -1,4 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
+import { logger } from "../lib/logger.js";
+import { env } from "../config/env.js";
 
 export class AppError extends Error {
   statusCode: number;
@@ -26,16 +28,27 @@ export function errorHandler(
   _next: NextFunction,
 ) {
   if (err instanceof AppError) {
-    return res.status(err.statusCode).json({
+    const payload: {
+      success: false;
+      message: string;
+      details?: unknown;
+    } = {
       success: false,
       message: err.message,
-      details: err.details,
-    });
+    };
+    // Only expose validation/business details for client errors
+    if (err.statusCode < 500 && err.details !== undefined) {
+      payload.details = err.details;
+    }
+    return res.status(err.statusCode).json(payload);
   }
 
-  console.error(err);
+  logger.error("Unhandled request error", err);
   return res.status(500).json({
     success: false,
     message: "Internal server error",
+    ...(env.nodeEnv === "development" && err instanceof Error
+      ? { details: { name: err.name, message: err.message } }
+      : {}),
   });
 }

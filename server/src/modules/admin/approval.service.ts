@@ -165,7 +165,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
     trialDays: TRIAL_DAYS,
   });
 
-  await notifyTenant({
+  const notifyResult = await notifyTenant({
     tenantId: tenant.id,
     type: "SYSTEM",
     title: "Account approved",
@@ -188,6 +188,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
       businessName: tenant.businessName,
       plan: tenant.selectedPlan.slug,
       branchId: result.branch.id,
+      emailDelivered: notifyResult.emailed,
     },
   });
 
@@ -203,9 +204,10 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
       qrCodeUrl: qr.qrCodeUrl,
       menuUrl: qr.menuUrl,
     },
-    // Returned once for admin visibility / testing (also emailed to tenant)
+    // One-time reveal for the approving admin UI (also emailed). Never logged.
     temporaryPassword: plainPassword,
     loginUrl,
+    emailDelivered: notifyResult.emailed,
   };
 }
 

@@ -21,6 +21,8 @@ import {
 } from "./approval.service.js";
 import { z } from "zod";
 import { listSubscriptionHistoryById } from "../subscriptions/subscription-history.js";
+import { sendPaymentProofFile } from "../../lib/payment-proof.js";
+import { prisma } from "../../lib/prisma.js";
 import {
   adminExtendSubscription,
   adminSetSubscriptionStatus,
@@ -181,6 +183,35 @@ adminRouter.get("/payments/export.csv", async (req, res, next) => {
       'attachment; filename="kitchenos-payments.csv"',
     );
     res.send(csv);
+  } catch (error) {
+    next(error);
+  }
+});
+
+adminRouter.get("/payments/:id/proof", async (req, res, next) => {
+  try {
+    const payment = await prisma.payment.findUnique({
+      where: { id: String(req.params.id) },
+      select: { screenshotUrl: true },
+    });
+    if (!payment) throw new AppError(404, "Payment not found");
+    sendPaymentProofFile(res, payment.screenshotUrl);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Registration payment screenshot (pending applications). */
+adminRouter.get("/registrations/:id/payment-proof", async (req, res, next) => {
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: String(req.params.id) },
+      select: { registrationPaymentUrl: true },
+    });
+    if (!tenant?.registrationPaymentUrl) {
+      throw new AppError(404, "Payment proof not found");
+    }
+    sendPaymentProofFile(res, tenant.registrationPaymentUrl);
   } catch (error) {
     next(error);
   }
