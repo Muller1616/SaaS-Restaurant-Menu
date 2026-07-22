@@ -8,6 +8,7 @@ import { FoodDescription } from "../../components/FoodDescription";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
+import { assetUrl } from "../../lib/api-base";
 import { validateDeviceImage } from "../../lib/device-image";
 import { formatEtb } from "../../lib/plans";
 import { subscriptionStatusLabel } from "../../lib/status-labels";
@@ -396,7 +397,7 @@ export function TenantMenuPage() {
                   <div className="aspect-[16/10] bg-black/30">
                     {item.imageUrl ? (
                       <img
-                        src={item.imageUrl}
+                        src={assetUrl(item.imageUrl)}
                         alt={item.name}
                         className="h-full w-full object-cover"
                         loading="lazy"

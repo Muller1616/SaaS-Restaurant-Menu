@@ -6,6 +6,7 @@ import { chartTheme } from "../../components/charts/chart-theme";
 import { PageSkeleton } from "../../features/navigation/PageSkeleton";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
+import { assetUrl } from "../../lib/api-base";
 import { subscriptionStatusLabel } from "../../lib/status-labels";
 
 type DashboardData = {
@@ -205,7 +206,7 @@ export function TenantDashboardPage() {
                   </h3>
                 </div>
                 <img
-                  src={branch.qrCodeUrl}
+                  src={assetUrl(branch.qrCodeUrl)}
                   alt={`${branch.name} QR`}
                   className="h-36 w-36 rounded-2xl bg-white p-2"
                 />
