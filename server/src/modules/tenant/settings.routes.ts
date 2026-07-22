@@ -6,6 +6,7 @@ import {
 } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/error.js";
 import { optimizeRequestImage } from "../../middleware/optimize-upload.js";
+import { requirePasswordChanged } from "../../middleware/require-password-changed.js";
 import { logoUpload } from "../../middleware/upload.js";
 import {
   countUnreadNotifications,
@@ -21,7 +22,7 @@ import {
 
 export const tenantSettingsRouter = Router();
 
-tenantSettingsRouter.use(requireAuth, requireTenant);
+tenantSettingsRouter.use(requireAuth, requireTenant, requirePasswordChanged);
 
 tenantSettingsRouter.get("/", async (req: AuthedRequest, res, next) => {
   try {

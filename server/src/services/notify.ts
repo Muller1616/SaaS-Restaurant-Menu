@@ -44,13 +44,13 @@ export async function notifyTenant(input: {
     (input.forceEmail || tenant.emailNotificationsEnabled);
 
   if (input.email && shouldEmail) {
-    await sendEmail({
+    const result = await sendEmail({
       to: tenant.email,
       subject: input.email.subject,
       text: input.email.text,
       html: input.email.html,
     });
-    return { emailed: true, stored: true };
+    return { emailed: result.ok, stored: true };
   }
 
   return { emailed: false, stored: true };

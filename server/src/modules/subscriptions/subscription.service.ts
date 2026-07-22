@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { env } from "../../config/env.js";
 import { logActivity } from "../../lib/activity-log.js";
+import { logger } from "../../lib/logger.js";
 import { parsePageParams, toPageResult } from "../../lib/pagination.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error.js";
@@ -861,7 +862,10 @@ KitchenOS Team`,
       purged += 1;
     } catch (error) {
       errors += 1;
-      console.warn("Retention purge failed:", subscription.id, error);
+      logger.warn("Retention purge failed", {
+        subscriptionId: subscription.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

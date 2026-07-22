@@ -5,6 +5,7 @@ import {
   requireTenant,
   type AuthedRequest,
 } from "../../middleware/auth.js";
+import { requirePasswordChanged } from "../../middleware/require-password-changed.js";
 import { getTenantProfile } from "../auth/auth.service.js";
 import {
   getBranchAnalytics,
@@ -13,7 +14,7 @@ import {
 
 export const tenantRouter = Router();
 
-tenantRouter.use(requireAuth, requireTenant);
+tenantRouter.use(requireAuth, requireTenant, requirePasswordChanged);
 
 tenantRouter.get("/dashboard", async (req: AuthedRequest, res, next) => {
   try {
