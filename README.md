@@ -20,7 +20,7 @@ npm run dev:server   # http://localhost:4000
 npm run dev:client   # http://localhost:5173
 ```
 
-Optional Mailhog / SMTP: set `SMTP_*` in `server/.env` (see `.env.example`).
+Optional local email inbox (Mailpit): `docker compose up -d mailpit`, then open http://localhost:8025. SMTP defaults in `server/.env` (`SMTP_HOST=localhost`, `SMTP_PORT=1025`).
 
 ## Accounts (seed)
 

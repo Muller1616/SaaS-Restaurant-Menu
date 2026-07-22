@@ -17,5 +17,14 @@ services:
       timeout: 5s
       retries: 10
 
+  # Local SMTP catcher for registration / approval emails (SMTP_HOST=localhost:1025)
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: kitchenos-mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
 volumes:
   kitchenos_pgdata:
