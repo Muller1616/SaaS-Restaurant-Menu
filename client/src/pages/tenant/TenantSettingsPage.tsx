@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
+import { assetUrl } from "../../lib/api-base";
 import { validateDeviceImage } from "../../lib/device-image";
 
 type Settings = {
@@ -117,7 +118,8 @@ export function TenantSettingsPage() {
       ),
   });
 
-  const displayLogo = logoPreview ?? query.data?.logoUrl ?? null;
+  const displayLogo =
+    logoPreview ?? assetUrl(query.data?.logoUrl ?? null) ?? null;
 
   return (
     <div className="space-y-6">

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
+import { assetUrl } from "../../lib/api-base";
 import { subscriptionStatusLabel } from "../../lib/status-labels";
 
 type QrPayload = {
@@ -195,7 +196,7 @@ export function TenantQrPage() {
               style={{ background: qr.data.style.bgColor }}
             >
               <img
-                src={`${qr.data.qrCodeUrl}?v=${cacheBust}`}
+                src={`${assetUrl(qr.data.qrCodeUrl)}?v=${cacheBust}`}
                 alt={`${qr.data.branchName} QR code`}
                 className="aspect-square w-full object-contain"
               />
