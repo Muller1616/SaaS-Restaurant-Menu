@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useMemo, useState } from "react";
+import { AuthenticatedImage } from "../../components/AuthenticatedImage";
 import { api, type ApiSuccess } from "../../lib/api";
 import { formatEtb } from "../../lib/plans";
 import { paymentMethodLabel } from "../../lib/status-labels";
@@ -36,6 +37,7 @@ type ApproveResult = {
   businessName: string;
   temporaryPassword: string;
   loginUrl: string;
+  emailDelivered?: boolean;
   branch: {
     name: string;
     menuUrl: string;
@@ -399,27 +401,20 @@ export function AdminApprovalsPage() {
                 {(selected.latestPayment?.screenshotUrl ||
                   selected.registrationPaymentUrl) && (
                   <div>
-                    <p className="mb-2 text-sm font-medium text-white">Payment screenshot</p>
-                    <a
-                      href={
-                        selected.latestPayment?.screenshotUrl ||
-                        selected.registrationPaymentUrl ||
-                        "#"
-                      }
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block overflow-hidden rounded-2xl border border-[var(--line)]"
-                    >
-                      <img
-                        src={
-                          selected.latestPayment?.screenshotUrl ||
-                          selected.registrationPaymentUrl ||
-                          ""
+                    <p className="mb-2 text-sm font-medium text-white">
+                      Payment screenshot
+                    </p>
+                    <div className="overflow-hidden rounded-2xl border border-[var(--line)]">
+                      <AuthenticatedImage
+                        apiPath={
+                          selected.latestPayment
+                            ? `/admin/payments/${selected.latestPayment.id}/proof`
+                            : `/admin/registrations/${selected.id}/payment-proof`
                         }
                         alt="Payment proof"
                         className="max-h-64 w-full bg-black/25 object-contain"
                       />
-                    </a>
+                    </div>
                   </div>
                 )}
 
@@ -537,8 +532,9 @@ export function AdminApprovalsPage() {
               {approvedCreds.businessName} is live
             </h3>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Credentials were emailed to the owner. Copy them now — this is the
-              only time the temporary password is shown in the console.
+              {approvedCreds.emailDelivered === false
+                ? "Email could not be delivered (SMTP unavailable). Copy these credentials and share them with the owner now — the temporary password is only shown once."
+                : "Credentials were emailed to the owner. Copy them now — the temporary password is only shown once here."}
             </p>
             <div className="mt-5 space-y-2 rounded-2xl border border-[var(--line)] bg-black/25 p-4 text-sm text-white">
               <p>

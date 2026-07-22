@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useMemo, useState } from "react";
 import { AdminPagination } from "../../components/AdminPagination";
+import { AuthenticatedImage } from "../../components/AuthenticatedImage";
 import { api, type ApiSuccess } from "../../lib/api";
 import { formatEtb } from "../../lib/plans";
 import {
@@ -260,18 +261,13 @@ export function AdminPaymentsPage() {
                 {paymentMethodLabel(selected.paymentMethod)} ·{" "}
                 {selected.referenceNumber}
               </p>
-              <a
-                href={selected.screenshotUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="block overflow-hidden rounded-xl border border-[var(--line)]"
-              >
-                <img
-                  src={selected.screenshotUrl}
+              <div className="overflow-hidden rounded-xl border border-[var(--line)]">
+                <AuthenticatedImage
+                  apiPath={`/admin/payments/${selected.id}/proof`}
                   alt="Payment proof"
                   className="max-h-64 w-full bg-black/25 object-contain"
                 />
-              </a>
+              </div>
 
               {selected.status === "PENDING" && (
                 <div className="space-y-2 pt-2">

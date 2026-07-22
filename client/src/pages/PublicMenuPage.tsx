@@ -10,7 +10,7 @@ import { formatEtb } from "../lib/plans";
 type PublicMenu =
   | {
       unavailable: true;
-      reason: "expired" | "suspended";
+      reason: "expired" | "suspended" | "pending";
       businessName: string;
       logoUrl?: string | null;
       branchName?: string;
