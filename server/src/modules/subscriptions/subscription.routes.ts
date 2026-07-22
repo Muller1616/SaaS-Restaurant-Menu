@@ -9,7 +9,10 @@ import {
 } from "../../middleware/branch-context.js";
 import { AppError } from "../../middleware/error.js";
 import { optimizeRequestImage } from "../../middleware/optimize-upload.js";
+import { requirePasswordChanged } from "../../middleware/require-password-changed.js";
 import { paymentUpload } from "../../middleware/upload.js";
+import { sendPaymentProofFile } from "../../lib/payment-proof.js";
+import { prisma } from "../../lib/prisma.js";
 import { listBranchSubscriptionHistory } from "../subscriptions/subscription-history.js";
 import {
   cancelBranchSubscription,
@@ -21,7 +24,12 @@ import {
 
 export const subscriptionRouter = Router();
 
-subscriptionRouter.use(requireAuth, requireTenant, requireBranchContext);
+subscriptionRouter.use(
+  requireAuth,
+  requireTenant,
+  requirePasswordChanged,
+  requireBranchContext,
+);
 
 subscriptionRouter.get("/", async (req: BranchAuthedRequest, res, next) => {
   try {
@@ -109,13 +117,26 @@ subscriptionRouter.post(
 
 export const tenantPaymentsRouter = Router();
 
-tenantPaymentsRouter.use(requireAuth, requireTenant);
+tenantPaymentsRouter.use(requireAuth, requireTenant, requirePasswordChanged);
 
 tenantPaymentsRouter.get("/", async (req: BranchAuthedRequest, res, next) => {
   try {
     const branchId = req.header("x-branch-id") || undefined;
     const data = await listTenantPayments(req.user!.sub, branchId);
     res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+tenantPaymentsRouter.get("/:id/proof", async (req: BranchAuthedRequest, res, next) => {
+  try {
+    const payment = await prisma.payment.findFirst({
+      where: { id: String(req.params.id), tenantId: req.user!.sub },
+      select: { screenshotUrl: true },
+    });
+    if (!payment) throw new AppError(404, "Payment not found");
+    sendPaymentProofFile(res, payment.screenshotUrl);
   } catch (error) {
     next(error);
   }

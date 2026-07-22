@@ -24,6 +24,17 @@ const viewLimiter = rateLimit({
   },
 });
 
+const registrationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many registration attempts. Please try again later.",
+  },
+});
+
 publicRouter.get("/plans", async (_req, res, next) => {
   try {
     const plans = await listActivePlans();
@@ -94,6 +105,7 @@ publicRouter.post(
 
 publicRouter.post(
   "/registrations",
+  registrationLimiter,
   (req, res, next) => {
     paymentUpload.single("paymentScreenshot")(req, res, (err) => {
       if (err) {
@@ -107,9 +119,7 @@ publicRouter.post(
             new AppError(400, "Payment screenshot must be 2MB or less"),
           );
         }
-        return next(
-          new AppError(400, err instanceof Error ? err.message : "Upload failed"),
-        );
+        return next(new AppError(400, "Upload failed"));
       }
       void optimizeRequestImage(req, "payment")
         .then(() => next())
