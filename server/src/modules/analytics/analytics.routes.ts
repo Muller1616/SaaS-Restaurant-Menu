@@ -7,11 +7,17 @@ import {
   requireBranchContext,
   type BranchAuthedRequest,
 } from "../../middleware/branch-context.js";
+import { requirePasswordChanged } from "../../middleware/require-password-changed.js";
 import { getBranchAnalytics } from "./analytics.service.js";
 
 export const analyticsRouter = Router();
 
-analyticsRouter.use(requireAuth, requireTenant, requireBranchContext);
+analyticsRouter.use(
+  requireAuth,
+  requireTenant,
+  requirePasswordChanged,
+  requireBranchContext,
+);
 
 analyticsRouter.get("/", async (req: BranchAuthedRequest, res, next) => {
   try {

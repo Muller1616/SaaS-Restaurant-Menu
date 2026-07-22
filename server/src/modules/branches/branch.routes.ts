@@ -5,6 +5,7 @@ import {
   type AuthedRequest,
 } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/error.js";
+import { requirePasswordChanged } from "../../middleware/require-password-changed.js";
 import {
   branchInputSchema,
   createBranch,
@@ -15,7 +16,7 @@ import {
 
 export const branchRouter = Router();
 
-branchRouter.use(requireAuth, requireTenant);
+branchRouter.use(requireAuth, requireTenant, requirePasswordChanged);
 
 branchRouter.get("/", async (req: AuthedRequest, res, next) => {
   try {

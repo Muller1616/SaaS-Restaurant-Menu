@@ -218,6 +218,12 @@ export async function loginTenant(input: TenantLoginInput) {
     throw new AppError(401, "Invalid email or password");
   }
 
+  // Always verify credentials before disclosing account status (enumeration hardening).
+  const valid = await bcrypt.compare(input.password, tenant.passwordHash);
+  if (!valid) {
+    throw new AppError(401, "Invalid email or password");
+  }
+
   if (tenant.status === "PENDING_APPROVAL") {
     throw new AppError(403, "Your application is still under review. We’ll email you once it’s approved.");
   }
@@ -240,11 +246,6 @@ export async function loginTenant(input: TenantLoginInput) {
   }
   if (tenant.status !== "ACTIVE") {
     throw new AppError(403, "This account isn’t available for sign-in right now.");
-  }
-
-  const valid = await bcrypt.compare(input.password, tenant.passwordHash);
-  if (!valid) {
-    throw new AppError(401, "Invalid email or password");
   }
 
   const token = signAccessToken(

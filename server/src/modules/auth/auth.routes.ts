@@ -30,19 +30,38 @@ import {
 export const authRouter = Router();
 
 authRouter.get("/csrf", csrfTokenHandler);
+// Allow POST as well so mistaken clients still bootstrap a token.
+authRouter.post("/csrf", csrfTokenHandler);
 
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    message: "Too many login attempts. Try again in 15 minutes.",
-  },
-});
+function createAuthLimiter(message: string, max: number) {
+  return rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    // Successful auth must not burn the budget — failed attempts only.
+    skipSuccessfulRequests: true,
+    message: {
+      success: false,
+      message,
+    },
+  });
+}
 
-authRouter.post("/admin/login", loginLimiter, async (req, res, next) => {
+const adminLoginLimiter = createAuthLimiter(
+  "Too many admin login attempts. Try again in 15 minutes.",
+  20,
+);
+const tenantLoginLimiter = createAuthLimiter(
+  "Too many login attempts. Try again in 15 minutes.",
+  20,
+);
+const passwordResetLimiter = createAuthLimiter(
+  "Too many password reset attempts. Try again in 15 minutes.",
+  10,
+);
+
+authRouter.post("/admin/login", adminLoginLimiter, async (req, res, next) => {
   try {
     const parsed = adminLoginSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -84,7 +103,7 @@ authRouter.post(
   },
 );
 
-authRouter.post("/tenant/login", loginLimiter, async (req, res, next) => {
+authRouter.post("/tenant/login", tenantLoginLimiter, async (req, res, next) => {
   try {
     const parsed = tenantLoginSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -144,7 +163,7 @@ authRouter.post(
   },
 );
 
-authRouter.post("/tenant/forgot-password", loginLimiter, async (req, res, next) => {
+authRouter.post("/tenant/forgot-password", passwordResetLimiter, async (req, res, next) => {
   try {
     const parsed = forgotPasswordSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -157,7 +176,7 @@ authRouter.post("/tenant/forgot-password", loginLimiter, async (req, res, next) 
   }
 });
 
-authRouter.post("/tenant/reset-password", loginLimiter, async (req, res, next) => {
+authRouter.post("/tenant/reset-password", passwordResetLimiter, async (req, res, next) => {
   try {
     const parsed = resetPasswordSchema.safeParse(req.body);
     if (!parsed.success) {
