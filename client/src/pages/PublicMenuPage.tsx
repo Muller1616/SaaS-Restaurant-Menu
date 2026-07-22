@@ -5,6 +5,7 @@ import { FoodDescription } from "../components/FoodDescription";
 import { CallToOrderSheet } from "../features/public-menu/CallToOrderSheet";
 import { ShareMenuSheet } from "../features/public-menu/ShareMenuSheet";
 import { api, type ApiSuccess } from "../lib/api";
+import { assetUrl } from "../lib/api-base";
 import { formatEtb } from "../lib/plans";
 
 type PublicMenu =
@@ -149,7 +150,7 @@ export function PublicMenuPage() {
           <section className="rounded-[2rem] border border-[var(--line)] bg-[var(--panel)] p-8 text-center">
             {menu.data.logoUrl && (
               <img
-                src={menu.data.logoUrl}
+                src={assetUrl(menu.data.logoUrl)}
                 alt=""
                 className="mx-auto mb-4 h-20 w-20 rounded-2xl object-cover"
               />
@@ -185,7 +186,7 @@ export function PublicMenuPage() {
             <header className="mb-6 text-center">
               {available.logoUrl && (
                 <img
-                  src={available.logoUrl}
+                  src={assetUrl(available.logoUrl)}
                   alt={`${available.businessName} logo`}
                   className="mx-auto mb-4 h-24 w-24 rounded-[1.25rem] border border-[var(--line)] object-cover"
                 />
@@ -261,7 +262,7 @@ export function PublicMenuPage() {
                 >
                   {item.imageUrl && (
                     <img
-                      src={item.imageUrl}
+                      src={assetUrl(item.imageUrl)}
                       alt={item.name}
                       className="aspect-[16/9] w-full object-cover"
                       loading="lazy"

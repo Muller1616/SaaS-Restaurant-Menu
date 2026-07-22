@@ -1,9 +1,12 @@
 import axios from "axios";
+import { getApiBaseUrl } from "./api-base";
 
 export const CSRF_HEADER = "X-CSRF-Token";
 
+const apiBase = getApiBaseUrl();
+
 export const api = axios.create({
-  baseURL: "/api/v1",
+  baseURL: apiBase,
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",
@@ -17,7 +20,7 @@ async function fetchCsrfToken(): Promise<string> {
   const { data } = await axios.get<{
     success: true;
     data: { csrfToken: string };
-  }>("/api/v1/auth/csrf", { withCredentials: true });
+  }>(`${apiBase}/auth/csrf`, { withCredentials: true });
   csrfToken = data.data.csrfToken;
   return csrfToken;
 }
