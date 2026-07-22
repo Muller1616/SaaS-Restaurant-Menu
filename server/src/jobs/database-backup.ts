@@ -9,7 +9,6 @@ const execFileAsync = promisify(execFile);
 
 export type BackupResult = {
   fileName: string;
-  filePath: string;
   sizeBytes: number;
   createdAt: string;
   method: "pg_dump" | "docker";
@@ -55,12 +54,12 @@ async function tryDockerDump(outPath: string): Promise<boolean> {
       "docker",
       [
         "exec",
-        "kitchenos-postgres",
+        env.backupDockerContainer,
         "pg_dump",
         "-U",
-        "kitchenos",
+        env.backupPgUser,
         "-d",
-        "kitchenos",
+        env.backupPgDatabase,
         "--no-owner",
         "--no-acl",
       ],
@@ -100,7 +99,7 @@ export async function runDatabaseBackup(): Promise<BackupResult> {
   } else {
     throw new AppError(
       500,
-      "Database backup failed. Install pg_dump or ensure Docker container kitchenos-postgres is running.",
+      "Database backup failed. Ensure pg_dump is available or the configured Docker Postgres container is running.",
     );
   }
 
@@ -109,7 +108,6 @@ export async function runDatabaseBackup(): Promise<BackupResult> {
 
   return {
     fileName,
-    filePath,
     sizeBytes: stat.size,
     createdAt: stat.mtime.toISOString(),
     method,

@@ -1,4 +1,5 @@
 import { env } from "../config/env.js";
+import { logger } from "../lib/logger.js";
 import { purgeExpiredCancelledSubscriptions } from "../modules/subscriptions/subscription.service.js";
 import {
   runDatabaseBackup,
@@ -21,17 +22,17 @@ export function startSubscriptionAlertScheduler() {
     try {
       const alerts = await runSubscriptionAlertJob();
       if (alerts.nearExpirySent > 0 || alerts.expiredSent > 0) {
-        console.log("[subscription-alerts]", alerts);
+        logger.info("Subscription alerts sent", alerts);
       }
 
       const retention = await purgeExpiredCancelledSubscriptions();
       if (retention.purged > 0) {
-        console.log("[subscription-retention]", retention);
+        logger.info("Subscription retention purge", retention);
       }
 
       if (await shouldRunAutomaticBackup()) {
         const backup = await runDatabaseBackup();
-        console.log("[db-backup]", {
+        logger.info("Database backup complete", {
           fileName: backup.fileName,
           sizeBytes: backup.sizeBytes,
           method: backup.method,
@@ -39,7 +40,7 @@ export function startSubscriptionAlertScheduler() {
         });
       }
     } catch (error) {
-      console.warn("[subscription-jobs] failed:", error);
+      logger.warn("Subscription jobs failed", { error: String(error) });
     } finally {
       running = false;
     }
@@ -48,9 +49,10 @@ export function startSubscriptionAlertScheduler() {
   void tick();
   timer = setInterval(() => void tick(), intervalMs);
 
-  console.log(
-    `[subscription-jobs] scheduler started (every ${minutes} minute(s); backups every ${env.backupIntervalHours}h)`,
-  );
+  logger.info("Subscription job scheduler started", {
+    intervalMinutes: minutes,
+    backupIntervalHours: env.backupIntervalHours,
+  });
 }
 
 export function stopSubscriptionAlertScheduler() {

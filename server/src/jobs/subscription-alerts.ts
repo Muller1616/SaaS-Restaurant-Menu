@@ -1,5 +1,6 @@
 import type { SubscriptionAlertKind } from "@prisma/client";
 import { env } from "../config/env.js";
+import { logger } from "../lib/logger.js";
 import { prisma } from "../lib/prisma.js";
 import {
   computeSubscriptionView,
@@ -211,7 +212,10 @@ export async function runSubscriptionAlertJob(now = new Date()) {
       skipped += 1;
     } catch (error) {
       errors += 1;
-      console.warn("Subscription alert failed:", subscription.id, error);
+      logger.warn("Subscription alert failed", {
+        subscriptionId: subscription.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
