@@ -9,6 +9,15 @@ import {
   paymentStatusLabel,
 } from "../../lib/status-labels";
 
+async function openPaymentProof(paymentId: string) {
+  const { data } = await api.get(`/tenant/payments/${paymentId}/proof`, {
+    responseType: "blob",
+  });
+  const url = URL.createObjectURL(data);
+  window.open(url, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 type PaymentRow = {
   id: string;
   amount: string;
@@ -104,14 +113,13 @@ export function TenantPaymentsPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <a
-                      href={payment.screenshotUrl}
-                      target="_blank"
-                      rel="noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => void openPaymentProof(payment.id)}
                       className="text-[var(--gold-soft)] underline"
                     >
                       View
-                    </a>
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -2,13 +2,17 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useState, type ReactNode } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
+import { FoodDescription } from "../../components/FoodDescription";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
 import { validateDeviceImage } from "../../lib/device-image";
 import { formatEtb } from "../../lib/plans";
 import { subscriptionStatusLabel } from "../../lib/status-labels";
+
+const DESCRIPTION_MAX = 4000;
 
 type MenuItem = {
   id: string;
@@ -50,7 +54,10 @@ const categorySchema = z.object({
 
 const itemSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  description: z.string().optional(),
+  description: z
+    .string()
+    .max(DESCRIPTION_MAX, `Keep the food description under ${DESCRIPTION_MAX} characters`)
+    .optional(),
   price: z.number().positive("Enter a valid price"),
   categoryId: z.string().min(1, "Category is required"),
   isAvailable: z.boolean(),
@@ -82,6 +89,11 @@ export function TenantMenuPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   const categoryForm = useForm<CategoryForm>({
     resolver: zodResolver(categorySchema),
@@ -99,6 +111,12 @@ export function TenantMenuPage() {
       isFeatured: false,
     },
   });
+  const descriptionDraft = useWatch({
+    control: itemForm.control,
+    name: "description",
+    defaultValue: "",
+  });
+  const descriptionLength = descriptionDraft?.length ?? 0;
 
   const categories = menu.data?.categories ?? [];
   const allItems = categories.flatMap((c) =>
@@ -406,9 +424,7 @@ export function TenantMenuPage() {
                       </p>
                     </div>
                     {item.description && (
-                      <p className="line-clamp-2 text-sm text-[var(--muted)]">
-                        {item.description}
-                      </p>
+                      <FoodDescription text={item.description} compact />
                     )}
                     {menu.data.canEdit && (
                       <div className="flex gap-2 pt-1">
@@ -421,11 +437,13 @@ export function TenantMenuPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            if (window.confirm(`Delete “${item.name}”?`)) {
-                              deleteItem.mutate(item.id);
-                            }
-                          }}
+                          onClick={() =>
+                            setConfirm({
+                              title: "Delete menu item",
+                              message: `Delete “${item.name}”? Guests will no longer see this dish.`,
+                              onConfirm: () => deleteItem.mutate(item.id),
+                            })
+                          }
                           className="rounded-full border border-[var(--danger)]/40 px-3 py-1.5 text-xs text-[var(--danger)]"
                         >
                           Delete
@@ -478,14 +496,15 @@ export function TenantMenuPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (
-                      window.confirm(
-                        `Remove category “${categoryModal.name}”? Items stay in the database but the category is hidden.`,
-                      )
-                    ) {
-                      deleteCategory.mutate(categoryModal.id);
-                      setCategoryModal(null);
-                    }
+                    const category = categoryModal;
+                    setConfirm({
+                      title: "Remove category",
+                      message: `Remove category “${category.name}”? Items stay in the database but the category is hidden.`,
+                      onConfirm: () => {
+                        deleteCategory.mutate(category.id);
+                        setCategoryModal(null);
+                      },
+                    });
                   }}
                   className="rounded-full border border-[var(--danger)]/40 px-5 py-2.5 text-sm text-[var(--danger)]"
                 >
@@ -509,11 +528,27 @@ export function TenantMenuPage() {
             <Field label="Item name" error={itemForm.formState.errors.name?.message}>
               <input className="field" {...itemForm.register("name")} />
             </Field>
-            <Field label="Description">
+            <Field
+              label="Detailed food description"
+              error={itemForm.formState.errors.description?.message}
+            >
               <textarea
-                className="field min-h-20"
+                className="field min-h-36 resize-y"
+                placeholder={`Example:
+Traditional Ethiopian mixed platter served on fresh injera.
+Includes shiro, misir wot, kik alicha, gomen, and seasonal vegetables.
+Served with homemade spices. Suitable for sharing.`}
+                maxLength={DESCRIPTION_MAX}
                 {...itemForm.register("description")}
               />
+              <p className="mt-2 text-xs leading-relaxed text-[var(--muted)]">
+                Tell guests what is in the dish: main ingredients, sides, sauces,
+                spices, preparation, serving style, allergens, dietary notes, and
+                portion size. Use new lines for clarity.
+              </p>
+              <p className="mt-1 text-right text-[11px] text-[var(--muted)]">
+                {descriptionLength}/{DESCRIPTION_MAX}
+              </p>
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Price (ETB)" error={itemForm.formState.errors.price?.message}>
@@ -578,6 +613,19 @@ export function TenantMenuPage() {
           </form>
         </Modal>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirm)}
+        title={confirm?.title ?? ""}
+        message={confirm?.message ?? ""}
+        confirmLabel="Delete"
+        danger
+        onCancel={() => setConfirm(null)}
+        onConfirm={() => {
+          confirm?.onConfirm();
+          setConfirm(null);
+        }}
+      />
 
       <style>{`
         .field {

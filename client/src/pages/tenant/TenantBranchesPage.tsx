@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import { StatusIndicator } from "../../components/charts/StatusIndicator";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
 import { subscriptionStatusLabel } from "../../lib/status-labels";
@@ -61,6 +62,10 @@ export function TenantBranchesPage() {
   const [editing, setEditing] = useState<BranchRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const form = useForm<BranchForm>({
     resolver: zodResolver(branchSchema),
@@ -311,15 +316,9 @@ export function TenantBranchesPage() {
                       <button
                         type="button"
                         disabled={query.data.branches.length <= 1 || busy}
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Remove branch “${branch.name}”? This hides it from your dashboard.`,
-                            )
-                          ) {
-                            deleteMutation.mutate(branch.id);
-                          }
-                        }}
+                        onClick={() =>
+                          setConfirmDeleteId({ id: branch.id, name: branch.name })
+                        }
                         className="rounded-full border border-[var(--danger)]/40 px-3 py-1.5 text-xs text-[var(--danger)] disabled:opacity-30"
                       >
                         Delete
@@ -389,6 +388,23 @@ export function TenantBranchesPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmDeleteId)}
+        title="Remove branch"
+        message={
+          confirmDeleteId
+            ? `Remove branch “${confirmDeleteId.name}”? This hides it from your dashboard.`
+            : ""
+        }
+        confirmLabel="Remove"
+        danger
+        onCancel={() => setConfirmDeleteId(null)}
+        onConfirm={() => {
+          if (confirmDeleteId) deleteMutation.mutate(confirmDeleteId.id);
+          setConfirmDeleteId(null);
+        }}
+      />
 
       <style>{`
         .field {

@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { z } from "zod";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
 import { validateDeviceImage } from "../../lib/device-image";
@@ -83,6 +84,7 @@ export function TenantSubscriptionPage() {
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const query = useQuery({
     queryKey: ["tenant", "subscription", currentBranchId],
@@ -315,16 +317,7 @@ export function TenantSubscriptionPage() {
                 <button
                   type="button"
                   disabled={cancelMutation.isPending}
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        `Cancel subscription for ${query.data.branch.name}? Data is retained for 30 days.`,
-                      )
-                    ) {
-                      setError(null);
-                      cancelMutation.mutate();
-                    }
-                  }}
+                  onClick={() => setConfirmCancel(true)}
                   className="mt-4 rounded-full border border-[var(--danger)]/50 px-5 py-2.5 text-sm text-[var(--danger)] hover:border-[var(--danger)] disabled:opacity-50"
                 >
                   {cancelMutation.isPending ? "Cancelling…" : "Cancel subscription"}
@@ -497,6 +490,25 @@ export function TenantSubscriptionPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmCancel}
+        title="Cancel subscription"
+        message={
+          query.data
+            ? `Cancel subscription for ${query.data.branch.name}? Data is retained for 30 days.`
+            : "Cancel this subscription?"
+        }
+        confirmLabel="Cancel plan"
+        danger
+        busy={cancelMutation.isPending}
+        onCancel={() => setConfirmCancel(false)}
+        onConfirm={() => {
+          setError(null);
+          setConfirmCancel(false);
+          cancelMutation.mutate();
+        }}
+      />
 
       <style>{`
         .field {
