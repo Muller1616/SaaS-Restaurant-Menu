@@ -1,5 +1,4 @@
 # KitchenOS — QR Restaurant Menu SaaS
-<<<<<<< HEAD
 
 Multi-tenant QR restaurant menu platform (SRS v1.0).
 
@@ -27,34 +26,17 @@ Optional local email inbox (Mailpit): `docker compose up -d mailpit`, then open 
 
 | Role | Email | Password |
 |---|---|---|
-| Super admin | `admin@kitchenos.local` | `password` |
-| Staff admin | `staff@kitchenos.local` | `password` |
+| Super admin | `admin@kitchenos.local` | from `ADMIN_PASSWORD` (default `Admin@12345`) |
+| Staff admin | `staff@kitchenos.local` | from `STAFF_ADMIN_PASSWORD` (default `Staff@12345`) |
 | Tenant | From registration approval | Temp password in admin modal + email |
 
-## What is included
+## Production (Vercel + Render)
 
-### Public & auth
-- Landing, registration (device payment proof for paid plans), public menu
-- URLs: `/r/:tenant/:branch` (canonical) · `/menu/...` alias
-- Tenant / admin login, remember me, forgot/reset password, forced change password
-- CSRF double-submit + Origin/Referer checks on mutating API calls
-
-### Tenant
-- Branches (plan limits), menu (categories/items, soft-delete, WebP uploads)
-- QR download / print / regenerate · **Custom QR** (colors + logo) on Basic+
-- Subscription (trial, renew, cancel + 30-day retention), payments, inbox, settings/logo
-- **Analytics** (Basic 7-day / Full 30-day + hour chart) when plan allows
-- Global subscription status banners
-
-### Admin
-- Dashboard, approvals, tenants, **branches**, subscriptions (+ **history**), payments (CSV)
-- Plans (edit = Super Admin), announcements (ALL_ACTIVE / SELECTED), activity log
-- RBAC: `SUPER_ADMIN` vs `ADMIN` (plans, delete tenant, ops jobs)
-- Jobs: subscription alerts, retention purge, DB backup (`server/backups/`)
-
-### Billing lifecycle
-- **TRIAL** 14 days on approval → Free stays ACTIVE forever · Paid continues with payment months
-- Near-expiry emails (7 / 3 / 1) + expired · cancel retention purge after 30 days
+1. Deploy **server** on Render (Web Service + PostgreSQL).
+2. Deploy **client** on Vercel with `VITE_API_URL=https://YOUR-API.onrender.com`.
+3. Set Render `CLIENT_URL` / `PUBLIC_APP_URL` to your Vercel HTTPS origin.
+4. Use a real SMTP provider (not localhost) and a strong `JWT_SECRET`.
+5. Attach a **persistent disk** on Render for `uploads/` (ephemeral disk loses QR/menu images on restart).
 
 ## Useful commands
 
@@ -63,7 +45,7 @@ npm run job:subscription-alerts -w server
 npm run job:db-backup -w server
 ```
 
-## Key URLs
+## Key URLs (local)
 
 | Page | URL |
 |---|---|
@@ -72,15 +54,3 @@ npm run job:db-backup -w server
 | Admin | http://localhost:5173/admin/login |
 | Tenant | http://localhost:5173/tenant/login |
 | Public menu | http://localhost:5173/r/:tenant/:branch |
-
-## Defaults
-
-| Topic | Choice |
-|---|---|
-| Free plan | Still requires admin approval |
-| Images | Device upload only (no URL fields) |
-| Storage | Local `uploads/` + Sharp → WebP |
-| Analytics | Implemented per plan feature flag |
-| TRIAL | 14 days on approval (FR-6.1) |
-=======
->>>>>>> c8ed59ee2a48acb0d7aaf28acd772fb673cafd16
