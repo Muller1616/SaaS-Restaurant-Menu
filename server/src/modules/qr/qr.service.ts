@@ -3,6 +3,7 @@ import path from "node:path";
 import { z } from "zod";
 import { env } from "../../config/env.js";
 import { logActivity } from "../../lib/activity-log.js";
+import { toPublicMediaUrl } from "../../lib/media-url.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error.js";
 import {
@@ -151,8 +152,8 @@ export async function getBranchQr(tenantId: string, branchId: string) {
     tenantSlug: branch.tenant.slug,
     branchSlug: branch.slug,
     menuUrl,
-    qrCodeUrl: qrCodeUrl ?? `/uploads/qr/${branch.id}.png`,
-    qrSvgUrl,
+    qrCodeUrl: toPublicMediaUrl(qrCodeUrl ?? `/uploads/qr/${branch.id}.png`)!,
+    qrSvgUrl: toPublicMediaUrl(qrSvgUrl)!,
     subscriptionStatus: branch.subscription?.status ?? null,
     canCustomize,
     hasLogo: Boolean(branch.tenant.logoUrl),

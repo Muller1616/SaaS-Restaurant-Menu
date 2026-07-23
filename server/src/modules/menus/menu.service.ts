@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { logActivity } from "../../lib/activity-log.js";
+import { toPublicMediaUrl } from "../../lib/media-url.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error.js";
 import {
@@ -58,7 +59,7 @@ function serializeItem(item: {
     description: item.description,
     price: item.price.toString(),
     currency: item.currency,
-    imageUrl: item.imageUrl,
+    imageUrl: toPublicMediaUrl(item.imageUrl),
     isAvailable: item.isAvailable,
     isFeatured: item.isFeatured,
     sortOrder: item.sortOrder,
@@ -382,7 +383,7 @@ export async function getPublicMenu(tenantSlug: string, branchSlug?: string) {
       unavailable: true as const,
       reason: "pending" as const,
       businessName: tenant.businessName,
-      logoUrl: tenant.logoUrl,
+      logoUrl: toPublicMediaUrl(tenant.logoUrl),
       message:
         "This restaurant is still being set up. Please check back soon.",
       phone: tenant.phone,
@@ -395,7 +396,7 @@ export async function getPublicMenu(tenantSlug: string, branchSlug?: string) {
       unavailable: true as const,
       reason: "suspended" as const,
       businessName: tenant.businessName,
-      logoUrl: tenant.logoUrl,
+      logoUrl: toPublicMediaUrl(tenant.logoUrl),
       message: "This menu isn’t available right now",
       phone: null as string | null,
       location: tenant.businessLocation,
@@ -447,7 +448,7 @@ export async function getPublicMenu(tenantSlug: string, branchSlug?: string) {
       unavailable: true as const,
       reason: "expired" as const,
       businessName: tenant.businessName,
-      logoUrl: tenant.logoUrl,
+      logoUrl: toPublicMediaUrl(tenant.logoUrl),
       branchName: branch.name,
       location: branch.location,
       phone: branch.phone,
@@ -459,7 +460,7 @@ export async function getPublicMenu(tenantSlug: string, branchSlug?: string) {
   return {
     unavailable: false as const,
     businessName: tenant.businessName,
-    logoUrl: tenant.logoUrl,
+    logoUrl: toPublicMediaUrl(tenant.logoUrl),
     branchName: branch.name,
     location: branch.location,
     phone: branch.phone,
