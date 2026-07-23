@@ -78,8 +78,11 @@ export function errorHandler(
       success: false,
       message: err.message,
     };
-    // Only expose validation/business details for client errors
-    if (err.statusCode < 500 && err.details !== undefined) {
+    // Expose safe business details for client errors and known delivery failures
+    const exposeDetails =
+      err.details !== undefined &&
+      (err.statusCode < 500 || err.statusCode === 502);
+    if (exposeDetails) {
       payload.details = err.details;
     }
     return res.status(err.statusCode).json(payload);

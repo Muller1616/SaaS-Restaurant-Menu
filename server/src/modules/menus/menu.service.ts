@@ -143,6 +143,7 @@ export async function getMenuWorkspace(branchId: string) {
       : null,
     itemCount,
     canAddItem,
+    publicQrId: branch.publicQrId,
     previewUrl: buildPublicQrUrl(branch.publicQrId),
     categories: branch.categories.map((category) => ({
       id: category.id,

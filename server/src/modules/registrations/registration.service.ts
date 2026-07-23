@@ -107,7 +107,7 @@ export async function createRegistration(
     planName: tenant.selectedPlan.name,
   });
 
-  await notifyTenant({
+  const notifyResult = await notifyTenant({
     tenantId: tenant.id,
     type: "SYSTEM",
     title: "Registration received",
@@ -130,10 +130,22 @@ export async function createRegistration(
       businessName: tenant.businessName,
       plan: tenant.selectedPlan.slug,
       status: "PENDING_APPROVAL",
+      emailDelivered: notifyResult.emailed,
     },
   });
 
   await invalidateAdminDashboardCache();
+
+  // Registration is already persisted as PENDING_APPROVAL. Do not claim
+  // confirmation was emailed unless SMTP delivery succeeded.
+  if (!notifyResult.emailed) {
+    throw new AppError(
+      502,
+      "Your application was saved, but we could not send the confirmation email. Please check your inbox later or contact support — do not submit again with the same email.",
+      { registrationSaved: true, emailDelivered: false },
+    );
+  }
+
   return {
     id: tenant.id,
     fullName: tenant.fullName,
@@ -146,8 +158,9 @@ export async function createRegistration(
       slug: tenant.selectedPlan.slug,
       priceMonthly: tenant.selectedPlan.priceMonthly.toString(),
     },
+    emailDelivered: true as const,
     message:
-      "Thanks — we received your application. We’ll email you once it’s been reviewed.",
+      "Thanks — we received your application and sent a confirmation email. We’ll email login credentials after approval.",
   };
 }
 
