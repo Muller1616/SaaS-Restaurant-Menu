@@ -132,6 +132,8 @@ model Tenant {
   suspendedReason           String?      @map("suspended_reason")
   emailNotificationsEnabled Boolean      @default(true) @map("email_notifications_enabled")
   mustChangePassword        Boolean      @default(false) @map("must_change_password")
+  /// Set when the owner completes activation (password set via secure link).
+  activatedAt               DateTime?    @map("activated_at")
   createdAt                 DateTime     @default(now()) @map("created_at")
   updatedAt                 DateTime     @updatedAt @map("updated_at")
 
@@ -140,6 +142,7 @@ model Tenant {
   payments          Payment[]
   notifications     Notification[]
   passwordResets    PasswordResetToken[]
+  activationTokens  ActivationToken[]
   menuViews         MenuView[]
 
   @@index([status])
@@ -377,4 +380,19 @@ model PasswordResetToken {
 
   @@index([tokenHash])
   @@map("password_reset_tokens")
+}
+
+/// Single-use account activation link issued on admin approval.
+model ActivationToken {
+  id        String    @id @default(cuid())
+  tenantId  String    @map("tenant_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("activation_tokens")
 }
