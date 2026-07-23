@@ -42,6 +42,8 @@ type TenantDetail = {
   businessLocation: string;
   businessDescription: string | null;
   status: string;
+  activatedAt: string | null;
+  mustChangePassword: boolean;
   suspendedReason: string | null;
   plan: { name: string; slug: string; priceMonthly: string };
   branches: Array<{
@@ -52,6 +54,15 @@ type TenantDetail = {
     subscriptionStatus: string | null;
     planName: string | null;
   }>;
+};
+
+type ActivationResendResult = {
+  email: string;
+  businessName: string;
+  temporaryPassword: string;
+  activationUrl: string;
+  loginUrl: string;
+  emailDelivered?: boolean;
 };
 
 async function fetchTenants(params: {
@@ -83,6 +94,8 @@ export function AdminTenantsPage() {
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [activationCreds, setActivationCreds] =
+    useState<ActivationResendResult | null>(null);
 
   const list = useQuery({
     queryKey: ["admin", "tenants", status, plan, q, from, to, page],
@@ -135,6 +148,28 @@ export function AdminTenantsPage() {
         axios.isAxiosError(err)
           ? (err.response?.data?.message as string) || "Delete failed"
           : "Delete failed",
+      ),
+  });
+
+  const resendActivation = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<ApiSuccess<ActivationResendResult>>(
+        `/admin/tenants/${selectedId}/resend-activation`,
+      );
+      return data.data;
+    },
+    onSuccess: (data) => {
+      setActivationCreds(data);
+      void queryClient.invalidateQueries({
+        queryKey: ["admin", "tenant", selectedId],
+      });
+    },
+    onError: (err) =>
+      setError(
+        axios.isAxiosError(err)
+          ? (err.response?.data?.message as string) ||
+              "Could not resend activation"
+          : "Could not resend activation",
       ),
   });
 
@@ -311,6 +346,14 @@ export function AdminTenantsPage() {
                 Plan: {detail.data.plan.name} · Status:{" "}
                 {tenantStatusLabel(detail.data.status)}
               </p>
+              {detail.data.status === "ACTIVE" && (
+                <p className="text-[var(--muted)]">
+                  Activation:{" "}
+                  {detail.data.activatedAt
+                    ? `Completed ${new Date(detail.data.activatedAt).toLocaleString()}`
+                    : "Pending — owner must open the activation email"}
+                </p>
+              )}
               {detail.data.suspendedReason && (
                 <p className="text-[var(--danger)]">
                   Reason: {detail.data.suspendedReason}
@@ -341,6 +384,19 @@ export function AdminTenantsPage() {
                     className="min-h-20 w-full rounded-xl border border-[var(--line)] bg-black/25 px-3 py-2 text-white outline-none focus:border-[var(--gold)]"
                   />
                   <div className="flex flex-wrap gap-2">
+                    {detail.data.status === "ACTIVE" &&
+                      !detail.data.activatedAt && (
+                        <button
+                          type="button"
+                          onClick={() => resendActivation.mutate()}
+                          disabled={resendActivation.isPending}
+                          className="rounded-full bg-[var(--gold)] px-4 py-2 text-sm font-bold text-[var(--night)] disabled:opacity-60"
+                        >
+                          {resendActivation.isPending
+                            ? "Sending…"
+                            : "Resend activation"}
+                        </button>
+                      )}
                     {detail.data.status === "ACTIVE" ? (
                       <button
                         type="button"
@@ -374,6 +430,47 @@ export function AdminTenantsPage() {
           )}
         </aside>
       </div>
+
+      {activationCreds && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)] p-6">
+            <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
+              Activation resent
+            </p>
+            <h3 className="mt-2 font-[family-name:var(--font-display)] text-3xl text-white">
+              {activationCreds.businessName}
+            </h3>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              {activationCreds.emailDelivered === false
+                ? "Email could not be delivered. Copy these credentials now."
+                : "A new activation email was sent. Copy the link and temporary password — shown once."}
+            </p>
+            <div className="mt-5 space-y-2 rounded-2xl border border-[var(--line)] bg-black/25 p-4 text-sm text-white">
+              <p>
+                <span className="text-[var(--muted)]">Email:</span>{" "}
+                {activationCreds.email}
+              </p>
+              <p>
+                <span className="text-[var(--muted)]">Temporary password:</span>{" "}
+                <span className="font-mono text-[var(--gold-soft)]">
+                  {activationCreds.temporaryPassword}
+                </span>
+              </p>
+              <p className="break-all">
+                <span className="text-[var(--muted)]">Activation link:</span>{" "}
+                {activationCreds.activationUrl}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActivationCreds(null)}
+              className="mt-5 rounded-full border border-white/15 px-5 py-2.5 text-sm hover:border-[var(--gold)]"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirmDelete && Boolean(detail.data)}
