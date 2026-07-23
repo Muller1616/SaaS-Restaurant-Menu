@@ -142,11 +142,11 @@ export function TenantSubscriptionPage() {
       setNotice(
         "Payment submitted — we'll confirm it once an admin reviews the proof.",
       );
-      await queryClient.invalidateQueries({ queryKey: ["tenant", "subscription"] });
-      await queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({ queryKey: ["tenant", "subscription"] });
+      void queryClient.invalidateQueries({
         queryKey: ["tenant", "subscription-history"],
       });
-      await queryClient.invalidateQueries({ queryKey: ["tenant", "payments"] });
+      void queryClient.invalidateQueries({ queryKey: ["tenant", "payments"] });
     },
     onError: (err) => {
       setError(
@@ -171,8 +171,8 @@ export function TenantSubscriptionPage() {
       setNotice(
         "Plan cancelled. Your menu data stays available for 30 days, then is removed.",
       );
-      await queryClient.invalidateQueries({ queryKey: ["tenant", "subscription"] });
-      await queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({ queryKey: ["tenant", "subscription"] });
+      void queryClient.invalidateQueries({
         queryKey: ["tenant", "subscription-history"],
       });
     },
