@@ -6,11 +6,12 @@ import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { FoodDescription } from "../../components/FoodDescription";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { MediaImage } from "../../components/MediaImage";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
-import { assetUrl } from "../../lib/api-base";
 import { validateDeviceImage } from "../../lib/device-image";
 import { formatEtb } from "../../lib/plans";
+import { refreshQueries } from "../../lib/refresh-queries";
 import { subscriptionStatusLabel } from "../../lib/status-labels";
 
 const DESCRIPTION_MAX = 4000;
@@ -129,8 +130,11 @@ export function TenantMenuPage() {
       : allItems.filter((item) => item.categoryId === activeCategoryId);
 
   function invalidate() {
-    void queryClient.invalidateQueries({ queryKey: ["tenant", "menu"] });
-    void queryClient.invalidateQueries({ queryKey: ["tenant", "dashboard"] });
+    refreshQueries(
+      queryClient,
+      ["tenant", "menu"],
+      ["tenant", "dashboard"],
+    );
   }
 
   const saveCategory = useMutation({
@@ -396,11 +400,10 @@ export function TenantMenuPage() {
                 >
                   <div className="aspect-[16/10] bg-black/30">
                     {item.imageUrl ? (
-                      <img
-                        src={assetUrl(item.imageUrl)}
+                      <MediaImage
+                        src={item.imageUrl}
                         alt={item.name}
                         className="h-full w-full object-cover"
-                        loading="lazy"
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center text-sm text-[var(--muted)]">

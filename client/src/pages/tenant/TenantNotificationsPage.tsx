@@ -31,8 +31,8 @@ export function TenantNotificationsPage() {
   const markAll = useMutation({
     mutationFn: async () => api.post("/tenant/settings/notifications/read-all"),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["tenant", "notifications"] });
-      await queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({ queryKey: ["tenant", "notifications"] });
+      void queryClient.invalidateQueries({
         queryKey: ["tenant", "notifications", "unread"],
       });
     },
@@ -42,8 +42,8 @@ export function TenantNotificationsPage() {
     mutationFn: async (id: string) =>
       api.post(`/tenant/settings/notifications/${id}/read`),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["tenant", "notifications"] });
-      await queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({ queryKey: ["tenant", "notifications"] });
+      void queryClient.invalidateQueries({
         queryKey: ["tenant", "notifications", "unread"],
       });
     },
