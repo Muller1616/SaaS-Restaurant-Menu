@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { env } from "../../config/env.js";
 import { logActivity } from "../../lib/activity-log.js";
@@ -14,6 +15,32 @@ import { notifyTenant } from "../../services/notify.js";
 import { generateBranchQr } from "../../services/qr.js";
 import { recordSubscriptionEvent } from "../subscriptions/subscription-history.js";
 import { TRIAL_DAYS, addDays } from "../subscriptions/subscription.logic.js";
+
+function hashActivationToken(rawToken: string) {
+  return createHash("sha256").update(rawToken).digest("hex");
+}
+
+/** Issue a single-use activation token; invalidates any unused prior tokens. */
+async function issueActivationToken(tenantId: string, slug: string) {
+  const rawToken = randomBytes(32).toString("base64url");
+  const tokenHash = hashActivationToken(rawToken);
+  const expiresAt = new Date(
+    Date.now() + env.activationTokenHours * 60 * 60 * 1000,
+  );
+
+  await prisma.$transaction([
+    prisma.activationToken.updateMany({
+      where: { tenantId, usedAt: null },
+      data: { usedAt: new Date() },
+    }),
+    prisma.activationToken.create({
+      data: { tenantId, tokenHash, expiresAt },
+    }),
+  ]);
+
+  const activationUrl = `${env.clientUrl}/tenant/activate/${encodeURIComponent(slug)}/${encodeURIComponent(rawToken)}`;
+  return { activationUrl, expiresAt };
+}
 
 export const rejectRegistrationSchema = z.object({
   reason: z.string().trim().max(1000).optional(),
@@ -75,6 +102,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
         status: "ACTIVE",
         passwordHash,
         mustChangePassword: true,
+        activatedAt: null,
         rejectedReason: null,
       },
     });
@@ -153,6 +181,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
     });
   }
 
+  const { activationUrl } = await issueActivationToken(tenant.id, tenant.slug);
   const loginUrl = `${env.clientUrl}/tenant/login`;
   const emailContent = accountApprovedEmail({
     fullName: tenant.fullName,
@@ -162,14 +191,16 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
     planName: tenant.selectedPlan.name,
     branchName: result.branch.name,
     loginUrl,
+    activationUrl,
+    activationHours: env.activationTokenHours,
     trialDays: TRIAL_DAYS,
   });
 
   const notifyResult = await notifyTenant({
     tenantId: tenant.id,
     type: "SYSTEM",
-    title: "Account approved",
-    message: `Your KitchenOS account is active on the ${tenant.selectedPlan.name} plan.`,
+    title: "Account approved — activate to sign in",
+    message: `Your KitchenOS account was approved on the ${tenant.selectedPlan.name} plan. Open the activation link in your email to set your password.`,
     forceEmail: true,
     email: {
       subject: emailContent.subject,
@@ -189,6 +220,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
       plan: tenant.selectedPlan.slug,
       branchId: result.branch.id,
       emailDelivered: notifyResult.emailed,
+      activationIssued: true,
     },
   });
 
@@ -206,6 +238,99 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
     },
     // One-time reveal for the approving admin UI (also emailed). Never logged.
     temporaryPassword: plainPassword,
+    activationUrl,
+    loginUrl,
+    emailDelivered: notifyResult.emailed,
+  };
+}
+
+/**
+ * Rotate temporary password + issue a fresh activation link for an
+ * approved but not-yet-activated tenant (expired/lost email recovery).
+ */
+export async function resendActivation(tenantId: string, adminId: string) {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    include: {
+      selectedPlan: true,
+      branches: {
+        where: { deletedAt: null, isDefault: true },
+        take: 1,
+      },
+    },
+  });
+
+  if (!tenant) {
+    throw new AppError(404, "Tenant not found");
+  }
+  if (tenant.status !== "ACTIVE") {
+    throw new AppError(400, "Only approved accounts can receive activation emails");
+  }
+  if (tenant.activatedAt) {
+    throw new AppError(400, "This account is already activated");
+  }
+
+  const plainPassword = generateSecurePassword(12);
+  const passwordHash = await bcrypt.hash(plainPassword, 10);
+
+  await prisma.tenant.update({
+    where: { id: tenant.id },
+    data: {
+      passwordHash,
+      mustChangePassword: true,
+      activatedAt: null,
+    },
+  });
+
+  const { activationUrl } = await issueActivationToken(tenant.id, tenant.slug);
+  const loginUrl = `${env.clientUrl}/tenant/login`;
+  const branchName = tenant.branches[0]?.name ?? tenant.businessName;
+
+  const emailContent = accountApprovedEmail({
+    fullName: tenant.fullName,
+    businessName: tenant.businessName,
+    email: tenant.email,
+    password: plainPassword,
+    planName: tenant.selectedPlan.name,
+    branchName,
+    loginUrl,
+    activationUrl,
+    activationHours: env.activationTokenHours,
+    trialDays: TRIAL_DAYS,
+  });
+
+  const notifyResult = await notifyTenant({
+    tenantId: tenant.id,
+    type: "SYSTEM",
+    title: "New activation link",
+    message:
+      "A new account activation link was issued. Open the email to set your password.",
+    forceEmail: true,
+    email: {
+      subject: emailContent.subject,
+      text: emailContent.text,
+      html: emailContent.html,
+    },
+  });
+
+  await logActivity({
+    userType: "ADMIN",
+    userId: adminId,
+    action: "UPDATE",
+    entityType: "tenant",
+    entityId: tenant.id,
+    details: {
+      field: "activation_resend",
+      emailDelivered: notifyResult.emailed,
+    },
+  });
+
+  return {
+    id: tenant.id,
+    email: tenant.email,
+    businessName: tenant.businessName,
+    temporaryPassword: plainPassword,
+    activationUrl,
     loginUrl,
     emailDelivered: notifyResult.emailed,
   };

@@ -45,16 +45,30 @@ export function registrationReceivedEmail(input: {
   const subject = "We received your KitchenOS application";
   const text = `Hi ${input.fullName},
 
-We received your application for ${input.businessName}.
+Your restaurant registration for ${input.businessName} has been received successfully.
 
 Selected plan: ${input.planName}
 
-Our team will review your registration and notify you by email once a decision is made.
+Our team is currently reviewing your application. Once approved, you will receive another email containing your account activation link and login credentials.
 
 Best regards,
 KitchenOS Team`;
 
-  return { subject, text };
+  const html = `
+  <div style="font-family:Manrope,Arial,sans-serif;background:#070a09;color:#eef2ef;padding:32px">
+    <div style="max-width:560px;margin:0 auto;background:#121a17;border:1px solid rgba(232,196,154,0.18);border-radius:24px;padding:28px">
+      <p style="letter-spacing:0.28em;text-transform:uppercase;color:#d4a574;font-size:12px;margin:0">KitchenOS</p>
+      <h1 style="font-family:Georgia,serif;font-size:32px;margin:12px 0 8px;color:#fff">Application received</h1>
+      <p style="color:rgba(238,242,239,0.72);line-height:1.6">Hi ${escapeHtml(input.fullName)}, thank you for registering <strong style="color:#fff">${escapeHtml(input.businessName)}</strong>.</p>
+      <p style="color:rgba(238,242,239,0.72);line-height:1.6">Your application is currently under review. Once approved, you will receive another email with your <strong style="color:#fff">activation link</strong> and temporary credentials.</p>
+      <div style="margin:24px 0;padding:16px;border-radius:16px;background:rgba(0,0,0,0.28);border:1px solid rgba(232,196,154,0.18)">
+        <p style="margin:0"><strong>Selected plan:</strong> ${escapeHtml(input.planName)}</p>
+      </div>
+      <p style="margin:0;color:rgba(238,242,239,0.55);font-size:13px">You cannot sign in until your application is approved.</p>
+    </div>
+  </div>`;
+
+  return { subject, text, html };
 }
 
 export function accountApprovedEmail(input: {
@@ -65,25 +79,30 @@ export function accountApprovedEmail(input: {
   planName: string;
   branchName: string;
   loginUrl: string;
+  activationUrl: string;
+  activationHours: number;
   trialDays?: number;
 }) {
   const trialDays = input.trialDays ?? 14;
-  const subject = "Your KitchenOS Account is Ready!";
+  const subject = "Your KitchenOS Account is Ready — Activate now";
   const text = `Hi ${input.fullName},
 
 Your registration for ${input.businessName} has been approved.
 
-Your login credentials:
+Activate your account (link expires in ${input.activationHours} hours):
+${input.activationUrl}
+
+Temporary credentials (for activation only):
 Email: ${input.email}
-Password: ${input.password}
+Temporary password: ${input.password}
 
-Login here: ${input.loginUrl}
+On the activation page, enter the temporary password and choose a new password. The temporary password will stop working after activation.
 
-Please change your password after first login.
+Then sign in here: ${input.loginUrl}
 
-Your plan: ${input.planName}
+Plan: ${input.planName}
 Branch: ${input.branchName}
-Trial: ${trialDays}-day free trial has started (full access).
+Trial: ${trialDays}-day free trial has started.
 
 Best regards,
 KitchenOS Team`;
@@ -92,21 +111,29 @@ KitchenOS Team`;
   <div style="font-family:Manrope,Arial,sans-serif;background:#070a09;color:#eef2ef;padding:32px">
     <div style="max-width:560px;margin:0 auto;background:#121a17;border:1px solid rgba(232,196,154,0.18);border-radius:24px;padding:28px">
       <p style="letter-spacing:0.28em;text-transform:uppercase;color:#d4a574;font-size:12px;margin:0">KitchenOS</p>
-      <h1 style="font-family:Georgia,serif;font-size:32px;margin:12px 0 8px;color:#fff">Your account is ready</h1>
-      <p style="color:rgba(238,242,239,0.72);line-height:1.6">Hi ${input.fullName}, your registration for <strong style="color:#fff">${input.businessName}</strong> has been approved.</p>
+      <h1 style="font-family:Georgia,serif;font-size:32px;margin:12px 0 8px;color:#fff">You're approved</h1>
+      <p style="color:rgba(238,242,239,0.72);line-height:1.6">Hi ${escapeHtml(input.fullName)}, <strong style="color:#fff">${escapeHtml(input.businessName)}</strong> is ready. Activate your account to choose a permanent password.</p>
       <div style="margin:24px 0;padding:16px;border-radius:16px;background:rgba(0,0,0,0.28);border:1px solid rgba(232,196,154,0.18)">
-        <p style="margin:0 0 8px"><strong>Email:</strong> ${input.email}</p>
-        <p style="margin:0 0 8px"><strong>Password:</strong> ${input.password}</p>
-        <p style="margin:0"><strong>Plan:</strong> ${input.planName}</p>
-        <p style="margin:8px 0 0"><strong>Branch:</strong> ${input.branchName}</p>
-        <p style="margin:8px 0 0"><strong>Trial:</strong> ${trialDays}-day free trial started</p>
+        <p style="margin:0 0 8px"><strong>Email:</strong> ${escapeHtml(input.email)}</p>
+        <p style="margin:0 0 8px"><strong>Temporary password:</strong> ${escapeHtml(input.password)}</p>
+        <p style="margin:0 0 8px"><strong>Plan:</strong> ${escapeHtml(input.planName)}</p>
+        <p style="margin:0 0 8px"><strong>Branch:</strong> ${escapeHtml(input.branchName)}</p>
+        <p style="margin:0"><strong>Trial:</strong> ${trialDays}-day free trial started</p>
       </div>
-      <a href="${input.loginUrl}" style="display:inline-block;background:#d4a574;color:#070a09;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:999px">Login to KitchenOS</a>
-      <p style="margin-top:20px;color:rgba(238,242,239,0.65);font-size:14px">Please change your password after first login.</p>
+      <a href="${input.activationUrl}" style="display:inline-block;background:#d4a574;color:#070a09;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:999px">Activate account</a>
+      <p style="margin-top:20px;color:rgba(238,242,239,0.65);font-size:14px">This activation link expires in <strong>${input.activationHours} hours</strong> and can be used once. After activation, sign in at <a href="${input.loginUrl}" style="color:#d4a574">${escapeHtml(input.loginUrl)}</a>.</p>
     </div>
   </div>`;
 
   return { subject, text, html };
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 export function accountRejectedEmail(input: {

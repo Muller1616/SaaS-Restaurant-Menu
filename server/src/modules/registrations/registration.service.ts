@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma.js";
+import { logActivity } from "../../lib/activity-log.js";
 import { uniqueTenantSlug } from "../../lib/slug.js";
 import { AppError } from "../../middleware/error.js";
 import { registrationReceivedEmail } from "../../services/email.js";
@@ -103,9 +104,24 @@ export async function createRegistration(
     type: "SYSTEM",
     title: "Registration received",
     message: `Your ${tenant.selectedPlan.name} plan application is pending approval.`,
+    forceEmail: true,
     email: {
       subject: emailContent.subject,
       text: emailContent.text,
+      html: emailContent.html,
+    },
+  });
+
+  await logActivity({
+    userType: "TENANT",
+    userId: tenant.id,
+    action: "CREATE",
+    entityType: "tenant",
+    entityId: tenant.id,
+    details: {
+      businessName: tenant.businessName,
+      plan: tenant.selectedPlan.slug,
+      status: "PENDING_APPROVAL",
     },
   });
 
