@@ -156,6 +156,8 @@ model Branch {
   location   String
   phone      String?
   slug       String
+  /// Opaque public QR route id → `/r/{publicQrId}` (never the tenant slug).
+  publicQrId String    @unique @map("public_qr_id")
   qrCodeUrl  String?   @map("qr_code_url")
   /// Custom QR foreground (modules) — Basic+ only at runtime.
   qrFgColor  String?   @map("qr_fg_color")
