@@ -47,6 +47,9 @@ if (isProduction && (smtpHost === "localhost" || smtpHost === "127.0.0.1")) {
   throw new Error("SMTP_HOST must be a real mail provider in production");
 }
 
+/** Public origin of this API (for absolute /uploads URLs in JSON). */
+const publicApiUrl = (process.env.PUBLIC_API_URL ?? "").replace(/\/$/, "");
+
 export const env = {
   nodeEnv,
   isProduction,
@@ -57,6 +60,7 @@ export const env = {
   jwtRememberExpiresIn: process.env.JWT_REMEMBER_EXPIRES_IN ?? "30d",
   clientUrl,
   publicAppUrl,
+  publicApiUrl,
   uploadDir: path.resolve(
     path.join(__dirname, "../.."),
     process.env.UPLOAD_DIR ?? "uploads",
