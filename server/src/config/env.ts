@@ -91,4 +91,9 @@ export const env = {
     process.env.BACKUP_DOCKER_CONTAINER ?? "kitchenos-postgres",
   backupPgUser: process.env.BACKUP_PGUSER ?? "kitchenos",
   backupPgDatabase: process.env.BACKUP_PGDATABASE ?? "kitchenos",
+  /**
+   * Optional Redis URL for distributed response caching.
+   * When unset, the API uses process-local memory cache (single instance).
+   */
+  redisUrl: (process.env.REDIS_URL ?? "").trim() || null,
 } as const;

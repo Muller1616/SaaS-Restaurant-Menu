@@ -73,6 +73,7 @@ export async function runSubscriptionAlertJob(now = new Date()) {
               email: true,
               businessName: true,
               status: true,
+              slug: true,
             },
           },
         },
@@ -107,7 +108,7 @@ export async function runSubscriptionAlertJob(now = new Date()) {
         now,
       });
 
-      const renewUrl = `${env.clientUrl}/tenant/subscription`;
+      const renewUrl = `${env.clientUrl}/r/${encodeURIComponent(subscription.branch.tenant.slug)}/subscription`;
       const tenant = subscription.branch.tenant;
       const branchName = subscription.branch.name;
 
