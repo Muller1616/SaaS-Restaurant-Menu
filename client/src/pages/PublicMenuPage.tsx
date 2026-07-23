@@ -41,11 +41,10 @@ type PublicMenu =
       }>;
     };
 
-async function fetchPublicMenu(tenantSlug: string, branchSlug?: string) {
-  const path = branchSlug
-    ? `/public/menu/${tenantSlug}/${branchSlug}`
-    : `/public/menu/${tenantSlug}`;
-  const { data } = await api.get<ApiSuccess<PublicMenu>>(path);
+async function fetchPublicMenu(publicQrId: string) {
+  const { data } = await api.get<ApiSuccess<PublicMenu>>(
+    `/public/qr/${publicQrId}`,
+  );
   return data.data;
 }
 
@@ -78,28 +77,26 @@ function MenuSkeleton() {
 }
 
 export function PublicMenuPage() {
-  const { tenantSlug = "", branchSlug } = useParams();
+  const { publicId = "" } = useParams();
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [shareOpen, setShareOpen] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
   const trackedKey = useRef<string | null>(null);
 
   const menu = useQuery({
-    queryKey: ["public-menu", tenantSlug, branchSlug],
-    queryFn: () => fetchPublicMenu(tenantSlug, branchSlug),
-    enabled: Boolean(tenantSlug),
+    queryKey: ["public-menu", publicId],
+    queryFn: () => fetchPublicMenu(publicId),
+    enabled: Boolean(publicId),
   });
 
   useEffect(() => {
-    if (!tenantSlug || !menu.data || menu.data.unavailable) return;
-    const key = `${tenantSlug}/${branchSlug ?? ""}`;
-    if (trackedKey.current === key) return;
-    trackedKey.current = key;
-    const path = branchSlug
-      ? `/public/menu/${tenantSlug}/${branchSlug}/views`
-      : `/public/menu/${tenantSlug}/views`;
-    void api.post(path).catch(() => undefined);
-  }, [menu.data, tenantSlug, branchSlug]);
+    if (!publicId || !menu.data || menu.data.unavailable) return;
+    if (trackedKey.current === publicId) return;
+    trackedKey.current = publicId;
+    void api
+      .post(`/public/qr/${publicId}/views`)
+      .catch(() => undefined);
+  }, [menu.data, publicId]);
 
   const categories =
     menu.data && !menu.data.unavailable ? menu.data.categories : [];

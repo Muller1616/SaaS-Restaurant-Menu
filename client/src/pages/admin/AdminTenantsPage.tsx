@@ -377,29 +377,33 @@ export function AdminTenantsPage() {
               </p>
               <div className="rounded-xl border border-[var(--line)] bg-black/20 p-3">
                 <p className="mb-2 text-[var(--muted)]">Restaurant slug</p>
-                <div className="flex flex-wrap gap-2">
-                  <input
-                    value={slugDraft}
-                    onChange={(e) => setSlugDraft(e.target.value.toLowerCase())}
-                    className="min-w-[180px] flex-1 rounded-xl border border-[var(--line)] bg-black/25 px-3 py-2 font-mono text-sm text-white outline-none focus:border-[var(--gold)]"
-                  />
-                  <button
-                    type="button"
-                    disabled={
-                      updateSlug.isPending ||
-                      !slugDraft ||
-                      slugDraft === detail.data.slug
-                    }
-                    onClick={() => updateSlug.mutate(slugDraft.trim())}
-                    className="rounded-full bg-[var(--gold)] px-4 py-2 text-sm font-bold text-[var(--night)] disabled:opacity-50"
-                  >
-                    {updateSlug.isPending ? "Saving…" : "Save slug"}
-                  </button>
-                </div>
+                {isSuperAdmin ? (
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      value={slugDraft}
+                      onChange={(e) =>
+                        setSlugDraft(e.target.value.toLowerCase())
+                      }
+                      className="min-w-[180px] flex-1 rounded-xl border border-[var(--line)] bg-black/25 px-3 py-2 font-mono text-sm text-white outline-none focus:border-[var(--gold)]"
+                    />
+                    <button
+                      type="button"
+                      disabled={
+                        updateSlug.isPending ||
+                        !slugDraft ||
+                        slugDraft === detail.data.slug
+                      }
+                      onClick={() => updateSlug.mutate(slugDraft.trim())}
+                      className="rounded-full bg-[var(--gold)] px-4 py-2 text-sm font-bold text-[var(--night)] disabled:opacity-50"
+                    >
+                      {updateSlug.isPending ? "Saving…" : "Save slug"}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="font-mono text-white">{detail.data.slug}</p>
+                )}
                 <p className="mt-2 break-all text-xs text-[var(--muted)]">
                   Portal: {detail.data.portalUrl}
-                  <br />
-                  Public menu: {detail.data.publicMenuUrl}
                 </p>
               </div>
               {detail.data.status === "ACTIVE" && (

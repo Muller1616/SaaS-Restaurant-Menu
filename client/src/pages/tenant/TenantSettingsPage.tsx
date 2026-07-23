@@ -3,6 +3,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
+import { tenantPortalPath } from "../../lib/tenant-paths";
 import { MediaImage } from "../../components/MediaImage";
 import { api, type ApiSuccess } from "../../lib/api";
 import { validateDeviceImage } from "../../lib/device-image";
@@ -26,7 +27,8 @@ async function fetchSettings() {
 
 export function TenantSettingsPage() {
   const queryClient = useQueryClient();
-  const { refreshTenant } = useTenantAuth();
+  const { refreshTenant , tenant} = useTenantAuth();
+  const portal = (...segments: string[]) => tenantPortalPath(tenant?.slug ?? "", ...segments);
   const query = useQuery({ queryKey: ["tenant", "settings"], queryFn: fetchSettings });
   const [enabled, setEnabled] = useState(true);
   const [phone, setPhone] = useState("");
@@ -159,7 +161,7 @@ export function TenantSettingsPage() {
               <Row label="Plan" value={query.data.selectedPlan.name} />
             </dl>
             <Link
-              to="/tenant/change-password"
+              to={portal("change-password")}
               className="mt-6 inline-flex rounded-full border border-white/15 px-4 py-2 text-sm hover:border-[var(--gold)]"
             >
               Change password

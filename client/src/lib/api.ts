@@ -2,8 +2,7 @@ import axios from "axios";
 import { getApiBaseUrl } from "./api-base";
 import {
   isTenantPortalPathname,
-  looksLikeActivationToken,
-  RESERVED_APP_SEGMENTS,
+  looksLikePublicQrId,
 } from "./tenant-paths";
 
 export const CSRF_HEADER = "X-CSRF-Token";
@@ -53,15 +52,13 @@ function isTenantFrontendPath(path: string) {
   ) {
     return false;
   }
-  if (isTenantPortalPathname(path)) return true;
+  // Public QR menu — no tenant JWT required
   const parts = path.split("/").filter(Boolean);
-  if (
-    parts.length === 2 &&
-    !RESERVED_APP_SEGMENTS.has(parts[0]) &&
-    looksLikeActivationToken(parts[1])
-  ) {
+  if (parts[0] === "r" && parts.length === 2 && looksLikePublicQrId(parts[1])) {
     return false;
   }
+  if (parts[0] === "r" && parts[2] === "activate") return false;
+  if (isTenantPortalPathname(path)) return true;
   return path.startsWith("/tenant");
 }
 
