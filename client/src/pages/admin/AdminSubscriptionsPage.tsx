@@ -8,6 +8,7 @@ import { formatEtb } from "../../lib/plans";
 import {
   activityActorLabel,
   filterOptionLabel,
+  paymentStatusLabel,
   subscriptionEventLabel,
   subscriptionStatusLabel,
 } from "../../lib/status-labels";
@@ -17,12 +18,53 @@ const SUBSCRIPTION_PAGE_SIZE = 5;
 type SubRow = {
   id: string;
   status: string;
+  storedStatus: string;
   startDate: string;
   expiryDate: string | null;
+  createdAt: string;
+  cancelledAt: string | null;
+  isAutoRenew: boolean;
   daysRemaining: number | null;
-  plan: { name: string; priceMonthly: string };
+  daysExpired: number;
+  subscriptionAgeDays: number;
+  renewalEligible: boolean;
+  isFreePlan: boolean;
+  billingCycleMonths: number | null;
+  paymentStatus: string | null;
+  currentPeriod: { startDate: string; endDate: string | null };
+  plan: { name: string; slug: string; priceMonthly: string };
   branch: { id: string; name: string };
-  tenant: { businessName: string; email: string; fullName: string };
+  tenant: {
+    id: string;
+    businessName: string;
+    email: string;
+    fullName: string;
+    registrationDate: string;
+  };
+  latestPayment: {
+    id: string;
+    status: string;
+    amount: string;
+    durationMonths: number;
+    createdAt: string;
+  } | null;
+};
+
+type SubscriptionStats = {
+  total: number;
+  active: number;
+  trial: number;
+  pending: number;
+  suspended: number;
+  cancelled: number;
+  expired: number;
+  gracePeriod: number;
+  renewed: number;
+  renewedThisMonth: number;
+  monthlyRevenue: string;
+  annualRevenue: string;
+  freePlanUsers: number;
+  paidPlanUsers: number;
 };
 
 type PageResult<T> = {
@@ -81,10 +123,37 @@ function statusTone(status: string) {
   }
 }
 
+function billingCycleLabel(months: number | null, isFree: boolean) {
+  if (isFree) return "Free · no billing cycle";
+  if (months == null) return "Monthly";
+  if (months === 1) return "1 month";
+  if (months === 3) return "3 months";
+  if (months === 6) return "6 months";
+  if (months === 12) return "12 months";
+  return `${months} months`;
+}
+
+function remainingLabel(row: SubRow) {
+  if (row.isFreePlan && !row.expiryDate) return "No expiry";
+  if (row.daysExpired > 0) {
+    return `Expired ${row.daysExpired} day${row.daysExpired === 1 ? "" : "s"} ago`;
+  }
+  if (row.daysRemaining == null) return "—";
+  if (row.daysRemaining === 0) return "Expires today";
+  return `${row.daysRemaining} day${row.daysRemaining === 1 ? "" : "s"} left`;
+}
+
 async function fetchSubs(status: string, page: number) {
   const { data } = await api.get<ApiSuccess<PageResult<SubRow>>>(
     "/admin/subscriptions",
     { params: { status, page, pageSize: SUBSCRIPTION_PAGE_SIZE } },
+  );
+  return data.data;
+}
+
+async function fetchStats() {
+  const { data } = await api.get<ApiSuccess<SubscriptionStats>>(
+    "/admin/subscriptions/stats",
   );
   return data.data;
 }
@@ -96,12 +165,40 @@ async function fetchHistory(id: string) {
   return data.data;
 }
 
+function StatCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
+      <p className="text-[11px] tracking-wide text-[var(--muted)] uppercase">
+        {label}
+      </p>
+      <p className="mt-1 font-[family-name:var(--font-display)] text-2xl text-white">
+        {value}
+      </p>
+      {hint && <p className="mt-0.5 text-xs text-[var(--muted)]">{hint}</p>}
+    </div>
+  );
+}
+
 export function AdminSubscriptionsPage() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<(typeof filters)[number]>("ALL");
   const [page, setPage] = useState(1);
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const stats = useQuery({
+    queryKey: ["admin", "subscription-stats"],
+    queryFn: fetchStats,
+    staleTime: 30_000,
+  });
 
   const query = useQuery({
     queryKey: ["admin", "subscriptions", filter, page],
@@ -127,6 +224,7 @@ export function AdminSubscriptionsPage() {
     },
     onSuccess: async (_data, vars) => {
       void queryClient.invalidateQueries({ queryKey: ["admin", "subscriptions"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "subscription-stats"] });
       void queryClient.invalidateQueries({
         queryKey: ["admin", "subscription-history", vars.id],
       });
@@ -151,6 +249,7 @@ export function AdminSubscriptionsPage() {
     },
     onSuccess: async (_data, vars) => {
       void queryClient.invalidateQueries({ queryKey: ["admin", "subscriptions"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "subscription-stats"] });
       void queryClient.invalidateQueries({
         queryKey: ["admin", "subscription-history", vars.id],
       });
@@ -164,6 +263,7 @@ export function AdminSubscriptionsPage() {
   });
 
   const busy = extend.isPending || setStatus.isPending;
+  const s = stats.data;
 
   return (
     <div className="space-y-6">
@@ -175,8 +275,50 @@ export function AdminSubscriptionsPage() {
           Subscriptions
         </h1>
         <p className="mt-1 text-[var(--muted)]">
-          Track branch plans, review history, and take quick billing actions.
+          Live branch plans, renewal history, and billing actions from the
+          database.
         </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <StatCard label="Total" value={String(s?.total ?? "—")} />
+        <StatCard
+          label="Active"
+          value={String(s?.active ?? "—")}
+          hint={s ? `${s.trial} on trial` : undefined}
+        />
+        <StatCard
+          label="Pending review"
+          value={String(s?.pending ?? "—")}
+          hint="Tenant registrations awaiting approval"
+        />
+        <StatCard label="Suspended" value={String(s?.suspended ?? "—")} />
+        <StatCard label="Cancelled" value={String(s?.cancelled ?? "—")} />
+        <StatCard
+          label="Expired"
+          value={String(s?.expired ?? "—")}
+          hint={s ? `${s.gracePeriod} in grace` : undefined}
+        />
+        <StatCard
+          label="Renewed"
+          value={String(s?.renewed ?? "—")}
+          hint={s ? `${s.renewedThisMonth} this month` : undefined}
+        />
+        <StatCard
+          label="Monthly revenue"
+          value={s ? formatEtb(s.monthlyRevenue) : "—"}
+          hint={s ? `YTD ${formatEtb(s.annualRevenue)}` : undefined}
+        />
+        <StatCard
+          label="Free plan"
+          value={String(s?.freePlanUsers ?? "—")}
+          hint="Active / trial / grace"
+        />
+        <StatCard
+          label="Paid plan"
+          value={String(s?.paidPlanUsers ?? "—")}
+          hint="Active / trial / grace"
+        />
       </div>
 
       <div className="flex gap-2 overflow-x-auto">
@@ -236,51 +378,69 @@ export function AdminSubscriptionsPage() {
                     {row.tenant.fullName} · {row.tenant.email}
                   </p>
                 </div>
-                <span
-                  className={[
-                    "rounded-full border px-3 py-1 text-xs font-semibold",
-                    statusTone(row.status),
-                  ].join(" ")}
-                >
-                  {subscriptionStatusLabel(row.status)}
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={[
+                      "rounded-full border px-3 py-1 text-xs font-semibold",
+                      statusTone(row.status),
+                    ].join(" ")}
+                  >
+                    {subscriptionStatusLabel(row.status)}
+                  </span>
+                  {row.renewalEligible && (
+                    <span className="rounded-full border border-white/15 px-3 py-1 text-xs text-[var(--muted)]">
+                      Renewal eligible
+                    </span>
+                  )}
+                </div>
               </div>
 
-              <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-2xl border border-[var(--line)] bg-black/20 px-3 py-3">
-                  <dt className="text-[11px] tracking-wide text-[var(--muted)] uppercase">
-                    Branch
-                  </dt>
-                  <dd className="mt-1 font-medium text-white">{row.branch.name}</dd>
-                </div>
-                <div className="rounded-2xl border border-[var(--line)] bg-black/20 px-3 py-3">
-                  <dt className="text-[11px] tracking-wide text-[var(--muted)] uppercase">
-                    Plan
-                  </dt>
-                  <dd className="mt-1 font-medium text-white">{row.plan.name}</dd>
-                  <dd className="text-xs text-[var(--gold-soft)]">
-                    {formatEtb(row.plan.priceMonthly)}/mo
-                  </dd>
-                </div>
-                <div className="rounded-2xl border border-[var(--line)] bg-black/20 px-3 py-3">
-                  <dt className="text-[11px] tracking-wide text-[var(--muted)] uppercase">
-                    Expires
-                  </dt>
-                  <dd className="mt-1 font-medium text-white">
-                    {formatAdminDate(row.expiryDate)}
-                  </dd>
-                </div>
-                <div className="rounded-2xl border border-[var(--line)] bg-black/20 px-3 py-3">
-                  <dt className="text-[11px] tracking-wide text-[var(--muted)] uppercase">
-                    Remaining
-                  </dt>
-                  <dd className="mt-1 font-medium text-white">
-                    {row.daysRemaining == null
-                      ? "—"
-                      : `${row.daysRemaining} day${row.daysRemaining === 1 ? "" : "s"}`}
-                  </dd>
-                </div>
-              </dl>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <Meta label="Branch" value={row.branch.name} />
+                <Meta
+                  label="Plan"
+                  value={row.plan.name}
+                  hint={`${formatEtb(row.plan.priceMonthly)}/mo`}
+                />
+                <Meta
+                  label="Billing cycle"
+                  value={billingCycleLabel(row.billingCycleMonths, row.isFreePlan)}
+                />
+                <Meta
+                  label="Registered"
+                  value={formatAdminDate(row.tenant.registrationDate)}
+                />
+                <Meta
+                  label="Period start"
+                  value={formatAdminDate(row.currentPeriod.startDate)}
+                />
+                <Meta
+                  label="Expires"
+                  value={formatAdminDate(row.currentPeriod.endDate)}
+                  hint={remainingLabel(row)}
+                />
+                <Meta
+                  label="Subscription age"
+                  value={`${row.subscriptionAgeDays} day${row.subscriptionAgeDays === 1 ? "" : "s"}`}
+                />
+                <Meta
+                  label="Payment status"
+                  value={
+                    row.paymentStatus
+                      ? paymentStatusLabel(row.paymentStatus)
+                      : "No payment yet"
+                  }
+                  hint={
+                    row.latestPayment
+                      ? `${formatEtb(row.latestPayment.amount)} · ${formatAdminDate(row.latestPayment.createdAt)}`
+                      : undefined
+                  }
+                />
+                <Meta
+                  label="Auto-renew"
+                  value={row.isAutoRenew ? "Enabled" : "Off"}
+                />
+              </div>
 
               <div className="mt-5 border-t border-[var(--line)] pt-4">
                 <p className="mb-2 text-[11px] tracking-[0.22em] text-[var(--muted)] uppercase">
@@ -305,7 +465,7 @@ export function AdminSubscriptionsPage() {
                   </button>
                   <button
                     type="button"
-                    disabled={busy || row.status === "SUSPENDED"}
+                    disabled={busy || row.storedStatus === "SUSPENDED"}
                     onClick={() =>
                       setStatus.mutate({ id: row.id, status: "SUSPENDED" })
                     }
@@ -315,7 +475,7 @@ export function AdminSubscriptionsPage() {
                   </button>
                   <button
                     type="button"
-                    disabled={busy || row.status === "ACTIVE"}
+                    disabled={busy || row.storedStatus === "ACTIVE"}
                     onClick={() =>
                       setStatus.mutate({ id: row.id, status: "ACTIVE" })
                     }
@@ -325,7 +485,7 @@ export function AdminSubscriptionsPage() {
                   </button>
                   <button
                     type="button"
-                    disabled={busy || row.status === "CANCELLED"}
+                    disabled={busy || row.storedStatus === "CANCELLED"}
                     onClick={() =>
                       setStatus.mutate({ id: row.id, status: "CANCELLED" })
                     }
@@ -358,7 +518,8 @@ export function AdminSubscriptionsPage() {
           {!historyId && (
             <p className="text-sm text-[var(--muted)]">
               Choose <span className="text-white">History</span> on a
-              subscription to review that branch’s billing timeline.
+              subscription to review registration → approval → renewals →
+              expiration for that branch.
             </p>
           )}
           {historyId && history.isLoading && (
@@ -368,7 +529,7 @@ export function AdminSubscriptionsPage() {
             <div className="space-y-4">
               <div>
                 <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
-                  Timeline
+                  Renewal history
                 </p>
                 <h2 className="font-[family-name:var(--font-display)] text-2xl text-white">
                   {history.data.branch.name}
@@ -421,6 +582,26 @@ export function AdminSubscriptionsPage() {
           )}
         </aside>
       </div>
+    </div>
+  );
+}
+
+function Meta({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-[var(--line)] bg-black/20 px-3 py-3">
+      <p className="text-[11px] tracking-wide text-[var(--muted)] uppercase">
+        {label}
+      </p>
+      <p className="mt-1 font-medium text-white">{value}</p>
+      {hint && <p className="text-xs text-[var(--gold-soft)]">{hint}</p>}
     </div>
   );
 }

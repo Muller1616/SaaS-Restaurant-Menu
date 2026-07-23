@@ -28,6 +28,7 @@ import {
   adminExtendSubscription,
   adminSetSubscriptionStatus,
   approvePayment,
+  getAdminSubscriptionStats,
   listAdminPayments,
   listAdminSubscriptions,
   paymentsToCsv,
@@ -286,6 +287,15 @@ adminRouter.get("/subscriptions", async (req, res, next) => {
       page: req.query.page ? String(req.query.page) : undefined,
       pageSize: req.query.pageSize ? String(req.query.pageSize) : undefined,
     });
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+adminRouter.get("/subscriptions/stats", async (_req, res, next) => {
+  try {
+    const data = await getAdminSubscriptionStats();
     res.json({ success: true, data });
   } catch (error) {
     next(error);

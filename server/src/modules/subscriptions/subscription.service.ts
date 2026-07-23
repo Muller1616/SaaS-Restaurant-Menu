@@ -15,6 +15,7 @@ import {
   addDays,
   addMonths,
   computeSubscriptionView,
+  daysBetween,
   syncSubscriptionStatus,
 } from "./subscription.logic.js";
 
@@ -596,6 +597,7 @@ export async function listAdminSubscriptions(input: {
   pageSize?: string | number;
 }) {
   const filter = input.filter;
+  const now = new Date();
   const subscriptions = await prisma.subscription.findMany({
     include: {
       plan: true,
@@ -607,6 +609,7 @@ export async function listAdminSubscriptions(input: {
               businessName: true,
               email: true,
               fullName: true,
+              createdAt: true,
             },
           },
         },
@@ -631,6 +634,7 @@ export async function listAdminSubscriptions(input: {
                 businessName: true,
                 email: true,
                 fullName: true,
+                createdAt: true,
               },
             },
           },
@@ -641,6 +645,7 @@ export async function listAdminSubscriptions(input: {
     const view = computeSubscriptionView({
       status: fresh.status,
       expiryDate: fresh.expiryDate,
+      now,
     });
 
     if (filter && filter !== "ALL") {
@@ -648,13 +653,34 @@ export async function listAdminSubscriptions(input: {
       if (filter !== "NEARLY_EXPIRED" && view.storedStatus !== filter) continue;
     }
 
+    const daysRemaining = view.daysRemaining;
+    const daysExpired =
+      daysRemaining != null && daysRemaining < 0
+        ? Math.abs(daysRemaining)
+        : view.isExpired && fresh.expiryDate
+          ? Math.max(0, daysBetween(fresh.expiryDate, now))
+          : 0;
+
+    const subscriptionAgeDays = daysBetween(fresh.startDate, now);
+
     mapped.push({
       id: fresh.id,
       status: view.status,
       storedStatus: fresh.status,
       startDate: fresh.startDate,
       expiryDate: fresh.expiryDate,
-      daysRemaining: view.daysRemaining,
+      createdAt: fresh.createdAt,
+      cancelledAt: fresh.cancelledAt,
+      isAutoRenew: fresh.isAutoRenew,
+      daysRemaining,
+      daysExpired,
+      subscriptionAgeDays: Math.max(0, subscriptionAgeDays),
+      renewalEligible: Boolean(view.showRenew),
+      isFreePlan: Number(fresh.plan.priceMonthly) === 0,
+      currentPeriod: {
+        startDate: fresh.startDate,
+        endDate: fresh.expiryDate,
+      },
       plan: {
         name: fresh.plan.name,
         slug: fresh.plan.slug,
@@ -664,14 +690,155 @@ export async function listAdminSubscriptions(input: {
         id: fresh.branch.id,
         name: fresh.branch.name,
       },
-      tenant: fresh.branch.tenant,
+      tenant: {
+        id: fresh.branch.tenant.id,
+        businessName: fresh.branch.tenant.businessName,
+        email: fresh.branch.tenant.email,
+        fullName: fresh.branch.tenant.fullName,
+        registrationDate: fresh.branch.tenant.createdAt,
+      },
+      // Filled below from batched payment lookup
+      latestPayment: null as null | {
+        id: string;
+        status: string;
+        amount: string;
+        durationMonths: number;
+        createdAt: Date;
+      },
+      billingCycleMonths: null as number | null,
+      paymentStatus: null as string | null,
     });
+  }
+
+  const branchIds = mapped.map((row) => row.branch.id);
+  if (branchIds.length > 0) {
+    const payments = await prisma.payment.findMany({
+      where: { branchId: { in: branchIds } },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        branchId: true,
+        status: true,
+        amount: true,
+        durationMonths: true,
+        createdAt: true,
+      },
+    });
+    const latestByBranch = new Map<string, (typeof payments)[number]>();
+    for (const payment of payments) {
+      if (!payment.branchId || latestByBranch.has(payment.branchId)) continue;
+      latestByBranch.set(payment.branchId, payment);
+    }
+
+    for (const row of mapped) {
+      const payment = latestByBranch.get(row.branch.id);
+      if (!payment) {
+        row.billingCycleMonths = row.isFreePlan ? null : 1;
+        continue;
+      }
+      row.latestPayment = {
+        id: payment.id,
+        status: payment.status,
+        amount: payment.amount.toString(),
+        durationMonths: payment.durationMonths,
+        createdAt: payment.createdAt,
+      };
+      row.paymentStatus = payment.status;
+      row.billingCycleMonths = payment.durationMonths;
+    }
   }
 
   const { page, pageSize } = parsePageParams(input);
   const total = mapped.length;
   const start = (page - 1) * pageSize;
   return toPageResult(mapped.slice(start, start + pageSize), total, page, pageSize);
+}
+
+/** Live subscription KPIs for the Admin Subscriptions module. */
+export async function getAdminSubscriptionStats() {
+  const now = new Date();
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+
+  const [
+    total,
+    byStatus,
+    pendingTenantApprovals,
+    freePlanUsers,
+    paidPlanUsers,
+    renewedThisMonth,
+    renewedAllTime,
+    monthlyRevenueRow,
+    annualRevenueRow,
+  ] = await Promise.all([
+    prisma.subscription.count({
+      where: { branch: { deletedAt: null } },
+    }),
+    prisma.subscription.groupBy({
+      by: ["status"],
+      where: { branch: { deletedAt: null } },
+      _count: { _all: true },
+    }),
+    prisma.tenant.count({ where: { status: "PENDING_APPROVAL" } }),
+    prisma.subscription.count({
+      where: {
+        branch: { deletedAt: null },
+        status: { in: ["TRIAL", "ACTIVE", "GRACE_PERIOD"] },
+        plan: { priceMonthly: 0 },
+      },
+    }),
+    prisma.subscription.count({
+      where: {
+        branch: { deletedAt: null },
+        status: { in: ["TRIAL", "ACTIVE", "GRACE_PERIOD"] },
+        plan: { priceMonthly: { gt: 0 } },
+      },
+    }),
+    prisma.subscriptionEvent.count({
+      where: {
+        kind: { in: ["EXTENDED", "PAYMENT_APPROVED"] },
+        createdAt: { gte: monthStart },
+      },
+    }),
+    prisma.subscriptionEvent.groupBy({
+      by: ["subscriptionId"],
+      where: { kind: { in: ["EXTENDED", "PAYMENT_APPROVED"] } },
+    }),
+    prisma.payment.aggregate({
+      where: {
+        status: "APPROVED",
+        createdAt: { gte: monthStart },
+      },
+      _sum: { amount: true },
+    }),
+    prisma.payment.aggregate({
+      where: {
+        status: "APPROVED",
+        createdAt: { gte: yearStart },
+      },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  const statusCount = (status: string) =>
+    byStatus.find((row) => row.status === status)?._count._all ?? 0;
+
+  return {
+    total,
+    active: statusCount("ACTIVE"),
+    trial: statusCount("TRIAL"),
+    pending: pendingTenantApprovals,
+    suspended: statusCount("SUSPENDED"),
+    cancelled: statusCount("CANCELLED"),
+    expired: statusCount("EXPIRED"),
+    gracePeriod: statusCount("GRACE_PERIOD"),
+    renewed: renewedAllTime.length,
+    renewedThisMonth,
+    monthlyRevenue: (monthlyRevenueRow._sum.amount ?? 0).toString(),
+    annualRevenue: (annualRevenueRow._sum.amount ?? 0).toString(),
+    freePlanUsers,
+    paidPlanUsers,
+  };
 }
 
 export async function adminExtendSubscription(input: {
