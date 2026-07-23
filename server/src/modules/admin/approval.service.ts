@@ -97,57 +97,63 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
   // FR-6.1: every approval starts a 14-day TRIAL; paid months begin after trial ends.
   const trialExpiry = addDays(now, TRIAL_DAYS);
 
-  const result = await prisma.$transaction(async (tx) => {
-    const updatedTenant = await tx.tenant.update({
-      where: { id: tenant.id },
-      data: {
-        status: "ACTIVE",
-        passwordHash,
-        mustChangePassword: true,
-        activatedAt: null,
-        rejectedReason: null,
-      },
-    });
-
-    const branch = await tx.branch.create({
-      data: {
-        tenantId: tenant.id,
-        name: branchName,
-        location: tenant.businessLocation,
-        phone: tenant.phone,
-        slug: branchSlug,
-        publicQrId,
-        isActive: true,
-        isDefault: true,
-      },
-    });
-
-    await tx.subscription.create({
-      data: {
-        branchId: branch.id,
-        planId: tenant.selectedPlanId,
-        status: "TRIAL",
-        startDate: now,
-        expiryDate: trialExpiry,
-        isAutoRenew: false,
-      },
-    });
-
-    if (pendingPayment) {
-      await tx.payment.update({
-        where: { id: pendingPayment.id },
+  const result = await prisma.$transaction(
+    async (tx) => {
+      const updatedTenant = await tx.tenant.update({
+        where: { id: tenant.id },
         data: {
-          status: "APPROVED",
-          approvedById: adminId,
-          branchId: branch.id,
-          adminNotes: "Approved with registration",
+          status: "ACTIVE",
+          passwordHash,
+          mustChangePassword: true,
+          activatedAt: null,
+          rejectedReason: null,
         },
       });
-    }
 
-    return { updatedTenant, branch };
-  });
+      const branch = await tx.branch.create({
+        data: {
+          tenantId: tenant.id,
+          name: branchName,
+          location: tenant.businessLocation,
+          phone: tenant.phone,
+          slug: branchSlug,
+          publicQrId,
+          isActive: true,
+          isDefault: true,
+        },
+      });
 
+      await tx.subscription.create({
+        data: {
+          branchId: branch.id,
+          planId: tenant.selectedPlanId,
+          status: "TRIAL",
+          startDate: now,
+          expiryDate: trialExpiry,
+          isAutoRenew: false,
+        },
+      });
+
+      if (pendingPayment) {
+        await tx.payment.update({
+          where: { id: pendingPayment.id },
+          data: {
+            status: "APPROVED",
+            approvedById: adminId,
+            branchId: branch.id,
+            adminNotes: "Approved with registration",
+          },
+        });
+      }
+
+      return { updatedTenant, branch };
+    },
+    {
+      // Interactive tx defaults to 5s — too low for remote DBs / cold pools.
+      maxWait: 10_000,
+      timeout: 20_000,
+    },
+  );
   const qr = await generateBranchQr({
     publicQrId: result.branch.publicQrId,
     branchId: result.branch.id,

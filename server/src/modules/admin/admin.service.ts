@@ -32,6 +32,18 @@ function seriesFromMap(counts: Map<string, number>, valueKey: string) {
   }));
 }
 
+function fillDailyCounts(
+  series: Map<string, number>,
+  rows: Array<{ day: Date; count: bigint | number }>,
+) {
+  for (const row of rows) {
+    const key = dayKey(new Date(row.day));
+    if (series.has(key)) {
+      series.set(key, Number(row.count));
+    }
+  }
+}
+
 export async function getAdminDashboardStats() {
   return cacheAside(
     CacheKeys.adminDashboard(),
@@ -53,6 +65,8 @@ async function loadAdminDashboardStats() {
   const windowDays = 30;
   const windowStart = addUtcDays(todayStart, -(windowDays - 1));
 
+  // Split into two waves to avoid exhausting the Prisma connection pool
+  // (12 parallel queries on a slow remote DB caused pool timeouts → 500s).
   const [
     totalTenants,
     activeSubscriptions,
@@ -60,12 +74,6 @@ async function loadAdminDashboardStats() {
     pendingPayments,
     expiredThisWeek,
     nearExpiry,
-    tenantsInWindow,
-    viewsInWindow,
-    paymentsInWindow,
-    subscriptionsByStatusRows,
-    paymentsByStatusRows,
-    paymentsByMethodRows,
   ] = await Promise.all([
     prisma.tenant.count(),
     prisma.subscription.count({ where: { status: "ACTIVE" } }),
@@ -87,20 +95,53 @@ async function loadAdminDashboardStats() {
         },
       },
     }),
-    prisma.tenant.findMany({
-      where: { createdAt: { gte: windowStart } },
-      select: { createdAt: true },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.menuView.findMany({
-      where: { viewedAt: { gte: windowStart } },
-      select: { viewedAt: true },
-      orderBy: { viewedAt: "asc" },
-    }),
-    prisma.payment.findMany({
-      where: { createdAt: { gte: windowStart } },
-      select: { createdAt: true, amount: true, status: true },
-      orderBy: { createdAt: "asc" },
+  ]);
+
+  const [
+    tenantDailyRows,
+    viewDailyRows,
+    paymentDailyRows,
+    approvedRevenueRow,
+    subscriptionsByStatusRows,
+    paymentsByStatusRows,
+    paymentsByMethodRows,
+  ] = await Promise.all([
+    prisma.$queryRaw<Array<{ day: Date; count: bigint }>>`
+      SELECT date_trunc('day', "created_at" AT TIME ZONE 'UTC') AS day,
+             COUNT(*)::bigint AS count
+      FROM tenants
+      WHERE "created_at" >= ${windowStart}
+      GROUP BY 1
+      ORDER BY 1 ASC
+    `,
+    prisma.$queryRaw<Array<{ day: Date; count: bigint }>>`
+      SELECT date_trunc('day', "viewed_at" AT TIME ZONE 'UTC') AS day,
+             COUNT(*)::bigint AS count
+      FROM menu_views
+      WHERE "viewed_at" >= ${windowStart}
+      GROUP BY 1
+      ORDER BY 1 ASC
+    `,
+    prisma.$queryRaw<
+      Array<{ day: Date; count: bigint; approved_amount: unknown }>
+    >`
+      SELECT date_trunc('day', "created_at" AT TIME ZONE 'UTC') AS day,
+             COUNT(*)::bigint AS count,
+             COALESCE(
+               SUM(CASE WHEN status = 'APPROVED' THEN amount ELSE 0 END),
+               0
+             ) AS approved_amount
+      FROM payments
+      WHERE "created_at" >= ${windowStart}
+      GROUP BY 1
+      ORDER BY 1 ASC
+    `,
+    prisma.payment.aggregate({
+      where: {
+        status: "APPROVED",
+        createdAt: { gte: windowStart },
+      },
+      _sum: { amount: true },
     }),
     prisma.subscription.groupBy({
       by: ["status"],
@@ -117,33 +158,26 @@ async function loadAdminDashboardStats() {
   ]);
 
   const tenantCounts = emptyDailySeries(windowStart, windowDays);
-  for (const row of tenantsInWindow) {
-    const key = dayKey(row.createdAt);
-    if (tenantCounts.has(key)) {
-      tenantCounts.set(key, (tenantCounts.get(key) ?? 0) + 1);
-    }
-  }
+  fillDailyCounts(tenantCounts, tenantDailyRows);
 
   const viewCounts = emptyDailySeries(windowStart, windowDays);
-  for (const row of viewsInWindow) {
-    const key = dayKey(row.viewedAt);
-    if (viewCounts.has(key)) {
-      viewCounts.set(key, (viewCounts.get(key) ?? 0) + 1);
-    }
-  }
+  fillDailyCounts(viewCounts, viewDailyRows);
 
   const paymentCountSeries = emptyDailySeries(windowStart, windowDays);
   const paymentAmountSeries = emptyDailySeries(windowStart, windowDays);
-  for (const row of paymentsInWindow) {
-    const key = dayKey(row.createdAt);
+  let menuViews30d = 0;
+  let newTenants30d = 0;
+  for (const row of viewDailyRows) {
+    menuViews30d += Number(row.count);
+  }
+  for (const row of tenantDailyRows) {
+    newTenants30d += Number(row.count);
+  }
+  for (const row of paymentDailyRows) {
+    const key = dayKey(new Date(row.day));
     if (!paymentCountSeries.has(key)) continue;
-    paymentCountSeries.set(key, (paymentCountSeries.get(key) ?? 0) + 1);
-    if (row.status === "APPROVED") {
-      paymentAmountSeries.set(
-        key,
-        (paymentAmountSeries.get(key) ?? 0) + Number(row.amount),
-      );
-    }
+    paymentCountSeries.set(key, Number(row.count));
+    paymentAmountSeries.set(key, Number(row.approved_amount ?? 0));
   }
 
   const paymentsLast30Days = [...paymentCountSeries.keys()].map((date) => ({
@@ -152,9 +186,7 @@ async function loadAdminDashboardStats() {
     approvedAmount: paymentAmountSeries.get(date) ?? 0,
   }));
 
-  const approvedRevenue30d = paymentsInWindow
-    .filter((p) => p.status === "APPROVED")
-    .reduce((sum, p) => sum + Number(p.amount), 0);
+  const approvedRevenue30d = Number(approvedRevenueRow._sum.amount ?? 0);
 
   return {
     totalTenants,
@@ -163,9 +195,9 @@ async function loadAdminDashboardStats() {
     pendingPayments,
     expiredThisWeek,
     nearExpiry,
-    menuViews30d: viewsInWindow.length,
+    menuViews30d,
     approvedRevenue30d,
-    newTenants30d: tenantsInWindow.length,
+    newTenants30d,
     charts: {
       tenantsLast30Days: seriesFromMap(tenantCounts, "count") as Array<{
         date: string;

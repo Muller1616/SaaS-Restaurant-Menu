@@ -188,11 +188,11 @@ async function loadBranchAnalytics(
     }),
     prisma.menuView.count({ where: { branchId } }),
     prisma.$queryRaw<Array<{ day: Date; views: bigint }>>`
-      SELECT date_trunc('day', "viewedAt" AT TIME ZONE 'UTC') AS day,
+      SELECT date_trunc('day', "viewed_at" AT TIME ZONE 'UTC') AS day,
              COUNT(*)::bigint AS views
-      FROM "MenuView"
-      WHERE "branchId" = ${branchId}
-        AND "viewedAt" >= ${windowStart}
+      FROM menu_views
+      WHERE "branch_id" = ${branchId}
+        AND "viewed_at" >= ${windowStart}
       GROUP BY 1
       ORDER BY 1 ASC
     `,
@@ -224,11 +224,11 @@ async function loadBranchAnalytics(
   if (tier === "full") {
     const [hourRows, uaRows] = await Promise.all([
       prisma.$queryRaw<Array<{ hour: number; views: bigint }>>`
-        SELECT EXTRACT(HOUR FROM ("viewedAt" AT TIME ZONE 'UTC'))::int AS hour,
+        SELECT EXTRACT(HOUR FROM ("viewed_at" AT TIME ZONE 'UTC'))::int AS hour,
                COUNT(*)::bigint AS views
-        FROM "MenuView"
-        WHERE "branchId" = ${branchId}
-          AND "viewedAt" >= ${windowStart}
+        FROM menu_views
+        WHERE "branch_id" = ${branchId}
+          AND "viewed_at" >= ${windowStart}
         GROUP BY 1
         ORDER BY 1 ASC
       `,
