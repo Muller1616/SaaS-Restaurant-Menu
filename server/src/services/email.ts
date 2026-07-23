@@ -26,14 +26,43 @@ export async function sendEmail(input: {
       text: input.text,
       html: input.html ?? `<pre>${input.text}</pre>`,
     });
-    return { ok: true as const, messageId: info.messageId };
-  } catch (error) {
-    logger.warn("Email send failed", {
+    logger.info("Email sent", {
       to: input.to,
       subject: input.subject,
+      messageId: info.messageId,
+    });
+    return { ok: true as const, messageId: info.messageId };
+  } catch (error) {
+    logger.error(
+      "Email send failed",
+      error,
+      {
+        to: input.to,
+        subject: input.subject,
+        smtpHost: env.smtp.host,
+        smtpPort: env.smtp.port,
+      },
+    );
+    return { ok: false as const, error };
+  }
+}
+
+/** Soft SMTP probe for startup diagnostics — never throws. */
+export async function verifySmtpConnection(): Promise<boolean> {
+  try {
+    await transporter.verify();
+    logger.info("SMTP connection verified", {
+      host: env.smtp.host,
+      port: env.smtp.port,
+    });
+    return true;
+  } catch (error) {
+    logger.warn("SMTP connection check failed — emails may not deliver", {
+      host: env.smtp.host,
+      port: env.smtp.port,
       error: error instanceof Error ? error.message : String(error),
     });
-    return { ok: false as const, error };
+    return false;
   }
 }
 
@@ -45,11 +74,18 @@ export function registrationReceivedEmail(input: {
   const subject = "We received your KitchenOS application";
   const text = `Hi ${input.fullName},
 
-Your restaurant registration for ${input.businessName} has been received successfully.
+Your restaurant registration for ${input.businessName} has been received successfully and is currently under review.
 
 Selected plan: ${input.planName}
 
-Our team is currently reviewing your application. Once approved, you will receive another email containing your account activation link and login credentials.
+What happens next:
+1. Our team reviews your application.
+2. After approval, you will receive another email containing:
+   - Your account activation link
+   - A temporary password
+   - Login instructions
+
+You cannot sign in until your application is approved.
 
 Best regards,
 KitchenOS Team`;
@@ -60,9 +96,15 @@ KitchenOS Team`;
       <p style="letter-spacing:0.28em;text-transform:uppercase;color:#d4a574;font-size:12px;margin:0">KitchenOS</p>
       <h1 style="font-family:Georgia,serif;font-size:32px;margin:12px 0 8px;color:#fff">Application received</h1>
       <p style="color:rgba(238,242,239,0.72);line-height:1.6">Hi ${escapeHtml(input.fullName)}, thank you for registering <strong style="color:#fff">${escapeHtml(input.businessName)}</strong>.</p>
-      <p style="color:rgba(238,242,239,0.72);line-height:1.6">Your application is currently under review. Once approved, you will receive another email with your <strong style="color:#fff">activation link</strong> and temporary credentials.</p>
+      <p style="color:rgba(238,242,239,0.72);line-height:1.6">Your application has been received successfully and is <strong style="color:#fff">currently under review</strong>.</p>
       <div style="margin:24px 0;padding:16px;border-radius:16px;background:rgba(0,0,0,0.28);border:1px solid rgba(232,196,154,0.18)">
-        <p style="margin:0"><strong>Selected plan:</strong> ${escapeHtml(input.planName)}</p>
+        <p style="margin:0 0 12px"><strong>Selected plan:</strong> ${escapeHtml(input.planName)}</p>
+        <p style="margin:0 0 8px;color:rgba(238,242,239,0.72)">After approval, you will receive another email with:</p>
+        <ul style="margin:0;padding-left:18px;color:rgba(238,242,239,0.72);line-height:1.7">
+          <li>Account activation link</li>
+          <li>Temporary password</li>
+          <li>Login instructions</li>
+        </ul>
       </div>
       <p style="margin:0;color:rgba(238,242,239,0.55);font-size:13px">You cannot sign in until your application is approved.</p>
     </div>

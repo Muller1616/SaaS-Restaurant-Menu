@@ -7,11 +7,14 @@ import {
 import { initCache } from "./lib/cache/index.js";
 import { logger } from "./lib/logger.js";
 import { logDatabaseTarget, prisma } from "./lib/prisma.js";
+import { verifySmtpConnection } from "./services/email.js";
 
 async function bootstrap() {
   logDatabaseTarget();
   await prisma.$connect();
   await initCache();
+  // Non-blocking: warn early if Mailpit/SMTP is down (emails still fail soft per-send).
+  void verifySmtpConnection();
 
   const app = createApp();
 
