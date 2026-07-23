@@ -6,9 +6,10 @@ import {
 } from "./jobs/scheduler.js";
 import { initCache } from "./lib/cache/index.js";
 import { logger } from "./lib/logger.js";
-import { prisma } from "./lib/prisma.js";
+import { logDatabaseTarget, prisma } from "./lib/prisma.js";
 
 async function bootstrap() {
+  logDatabaseTarget();
   await prisma.$connect();
   await initCache();
 
