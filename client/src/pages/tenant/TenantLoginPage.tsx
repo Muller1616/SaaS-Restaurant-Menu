@@ -103,7 +103,8 @@ export function TenantLoginPage() {
             Restaurant sign in
           </h2>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            Use the credentials from your approval email.
+            After approval, activate your account from the email link, then sign
+            in with your new password.
           </p>
 
           {idleExpired && (
