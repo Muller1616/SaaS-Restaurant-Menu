@@ -10,6 +10,7 @@ import {
 import { chartTheme } from "../../components/charts/chart-theme";
 import { PageSkeleton } from "../../features/navigation/PageSkeleton";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
+import { tenantPortalPath } from "../../lib/tenant-paths";
 import { api, type ApiSuccess } from "../../lib/api";
 
 type AnalyticsPayload = {
@@ -38,6 +39,7 @@ async function fetchAnalytics() {
 
 export function TenantAnalyticsPage() {
   const { currentBranchId, tenant } = useTenantAuth();
+  const portal = (...segments: string[]) => tenantPortalPath(tenant?.slug ?? "", ...segments);
   const analyticsLevel = tenant?.selectedPlan.features?.analytics ?? "none";
   const locked = analyticsLevel === "none";
 
@@ -88,7 +90,7 @@ export function TenantAnalyticsPage() {
             trends plus hour and device breakdowns.
           </p>
           <Link
-            to="/tenant/subscription"
+            to={portal("subscription")}
             className="mt-5 inline-flex rounded-full bg-[var(--gold)] px-5 py-2.5 text-sm font-bold text-[var(--night)]"
           >
             View plans

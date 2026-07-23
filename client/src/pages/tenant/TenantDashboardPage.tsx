@@ -6,6 +6,7 @@ import { chartTheme } from "../../components/charts/chart-theme";
 import { MediaImage } from "../../components/MediaImage";
 import { PageSkeleton } from "../../features/navigation/PageSkeleton";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
+import { tenantPortalPath } from "../../lib/tenant-paths";
 import { api, type ApiSuccess } from "../../lib/api";
 import { subscriptionStatusLabel } from "../../lib/status-labels";
 
@@ -52,6 +53,7 @@ async function fetchDashboard() {
 
 export function TenantDashboardPage() {
   const { tenant, currentBranchId } = useTenantAuth();
+  const portal = (...segments: string[]) => tenantPortalPath(tenant?.slug ?? "", ...segments);
   const dashboard = useQuery({
     queryKey: ["tenant", "dashboard", currentBranchId],
     queryFn: fetchDashboard,
@@ -142,7 +144,7 @@ export function TenantDashboardPage() {
                   accent="secondary"
                 />
                 <Link
-                  to="/tenant/analytics"
+                  to={portal("analytics")}
                   className="inline-flex items-center justify-center rounded-full border border-white/15 px-4 py-2.5 text-sm text-white transition hover:border-[rgba(91,141,239,0.55)]"
                   style={{ color: chartTheme.primarySoft }}
                 >
@@ -173,7 +175,7 @@ export function TenantDashboardPage() {
                 dashboard.
               </p>
               <Link
-                to="/tenant/subscription"
+                to={portal("subscription")}
                 className="mt-4 inline-flex rounded-full bg-[var(--gold)] px-5 py-2.5 text-sm font-bold text-[var(--night)]"
               >
                 View plans
@@ -185,13 +187,13 @@ export function TenantDashboardPage() {
             <ActionCard
               title="Craft your menu"
               body="Add categories and dishes for this branch. Guests will see updates instantly."
-              to="/tenant/menu"
+              to={portal("menu")}
               cta="Open menu"
             />
             <ActionCard
               title="Share your QR"
               body="Download or print the branch QR so every table opens your public menu."
-              to="/tenant/qr"
+              to={portal("qr")}
               cta="View QR code"
             />
           </div>

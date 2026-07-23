@@ -41,19 +41,22 @@ type PreviewFail = {
 type Preview = PreviewOk | PreviewFail;
 
 export function TenantActivatePage() {
-  const { slug = "", token = "" } = useParams();
+  const { tenantSlug = "", activationToken = "", slug = "", token = "" } =
+    useParams();
+  const slugValue = tenantSlug || slug;
+  const tokenValue = activationToken || token;
   const navigate = useNavigate();
   const [resendEmail, setResendEmail] = useState("");
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
 
   const preview = useQuery({
-    queryKey: ["tenant", "activate", slug, token],
-    enabled: Boolean(slug && token),
+    queryKey: ["tenant", "activate", slugValue, tokenValue],
+    enabled: Boolean(slugValue && tokenValue),
     queryFn: async () => {
       const { data } = await api.get<ApiSuccess<Preview>>(
         "/auth/tenant/activate",
-        { params: { slug, token } },
+        { params: { slug: slugValue, token: tokenValue } },
       );
       return data.data;
     },
@@ -72,8 +75,8 @@ export function TenantActivatePage() {
   async function onSubmit(values: FormValues) {
     try {
       await api.post("/auth/tenant/activate", {
-        slug,
-        token,
+        slug: slugValue,
+        token: tokenValue,
         temporaryPassword: values.temporaryPassword,
         newPassword: values.newPassword,
         confirmPassword: values.confirmPassword,
@@ -111,8 +114,8 @@ export function TenantActivatePage() {
   }
 
   const invalid =
-    !slug ||
-    !token ||
+    !slugValue ||
+    !tokenValue ||
     preview.isError ||
     (preview.data && preview.data.valid === false);
 

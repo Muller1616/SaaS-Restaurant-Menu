@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
+import { tenantPortalPath } from "../../lib/tenant-paths";
 import { api } from "../../lib/api";
 
 const schema = z
@@ -21,6 +22,7 @@ type FormValues = z.infer<typeof schema>;
 
 export function TenantChangePasswordPage() {
   const { markPasswordChanged, tenant } = useTenantAuth();
+  const portal = (...segments: string[]) => tenantPortalPath(tenant?.slug ?? "", ...segments);
   const navigate = useNavigate();
 
   const {
@@ -39,7 +41,7 @@ export function TenantChangePasswordPage() {
         newPassword: values.newPassword,
       });
       markPasswordChanged();
-      navigate("/tenant", { replace: true });
+      navigate(portal(), { replace: true });
     } catch (error) {
       setError("root", {
         message: axios.isAxiosError(error)
