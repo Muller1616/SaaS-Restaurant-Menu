@@ -83,8 +83,8 @@ export function TenantBranchesPage() {
   }, [params, query.data?.canAddBranch, form, setParams]);
 
   async function afterBranchChange() {
-    await queryClient.invalidateQueries({ queryKey: ["tenant", "branches"] });
-    await queryClient.invalidateQueries({ queryKey: ["tenant", "dashboard"] });
+    void queryClient.invalidateQueries({ queryKey: ["tenant", "branches"] });
+    void queryClient.invalidateQueries({ queryKey: ["tenant", "dashboard"] });
     await refreshTenant();
   }
 
