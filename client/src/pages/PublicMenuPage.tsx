@@ -77,28 +77,32 @@ function MenuSkeleton() {
 }
 
 export function PublicMenuPage() {
-  const { publicId = "" } = useParams();
+  // Route param is `:tenantSlug` on `/r/:tenantSlug` (public QR ids use the same slot).
+  const { publicId = "", tenantSlug = "" } = useParams();
+  const qrId = publicId || tenantSlug;
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [shareOpen, setShareOpen] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
   const trackedKey = useRef<string | null>(null);
 
   const menu = useQuery({
-    queryKey: ["public-menu", publicId],
-    queryFn: () => fetchPublicMenu(publicId),
-    enabled: Boolean(publicId),
-    staleTime: 60_000,
+    queryKey: ["public-menu", qrId],
+    queryFn: () => fetchPublicMenu(qrId),
+    enabled: Boolean(qrId),
+    // Preview / customer views should reflect recent menu edits quickly.
+    staleTime: 15_000,
     gcTime: 15 * 60_000,
+    refetchOnMount: "always",
   });
 
   useEffect(() => {
-    if (!publicId || !menu.data || menu.data.unavailable) return;
-    if (trackedKey.current === publicId) return;
-    trackedKey.current = publicId;
+    if (!qrId || !menu.data || menu.data.unavailable) return;
+    if (trackedKey.current === qrId) return;
+    trackedKey.current = qrId;
     void api
-      .post(`/public/qr/${publicId}/views`)
+      .post(`/public/qr/${qrId}/views`)
       .catch(() => undefined);
-  }, [menu.data, publicId]);
+  }, [menu.data, qrId]);
 
   const categories =
     menu.data && !menu.data.unavailable ? menu.data.categories : [];

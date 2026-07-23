@@ -1,9 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import axios from "axios";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
-import { Link, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import { PublicNav } from "../components/PublicNav";
 import { api, type ApiSuccess } from "../lib/api";
@@ -44,20 +44,25 @@ const registrationSchema = z
 
 type RegistrationForm = z.infer<typeof registrationSchema>;
 
+type RegistrationSuccess = {
+  businessName: string;
+  email: string;
+  plan: { name: string };
+  emailDelivered: boolean;
+  message: string;
+};
+
 async function fetchPlans() {
   const { data } = await api.get<ApiSuccess<Plan[]>>("/plans");
   return data.data;
 }
 
 export function RegisterPage() {
+  const navigate = useNavigate();
   const [params] = useSearchParams();
   const initialPlan = (params.get("plan") as RegistrationForm["planSlug"]) || "free";
   const [screenshot, setScreenshot] = useState<File | null>(null);
-  const [submitted, setSubmitted] = useState<{
-    businessName: string;
-    email: string;
-    planName: string;
-  } | null>(null);
+  const [success, setSuccess] = useState<RegistrationSuccess | null>(null);
 
   const plans = useQuery({
     queryKey: ["plans"],
@@ -104,22 +109,14 @@ export function RegisterPage() {
       });
       if (screenshot) body.append("paymentScreenshot", screenshot);
 
-      const { data } = await api.post<
-        ApiSuccess<{
-          businessName: string;
-          email: string;
-          plan: { name: string };
-          message: string;
-        }>
-      >("/registrations", body);
+      const { data } = await api.post<ApiSuccess<RegistrationSuccess>>(
+        "/registrations",
+        body,
+      );
       return data.data;
     },
     onSuccess: (data) => {
-      setSubmitted({
-        businessName: data.businessName,
-        email: data.email,
-        planName: data.plan.name,
-      });
+      setSuccess(data);
     },
   });
 
@@ -137,34 +134,9 @@ export function RegisterPage() {
     }
   }
 
-  if (submitted) {
-    return (
-      <div className="min-h-screen bg-[var(--night)]">
-        <PublicNav />
-        <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6 py-28">
-          <div className="animate-rise rounded-[2rem] border border-[var(--line)] bg-[var(--panel)] p-8">
-            <p className="text-xs tracking-[0.3em] text-[var(--gold)] uppercase">
-              Application received
-            </p>
-            <h1 className="mt-3 font-[family-name:var(--font-display)] text-4xl text-white">
-              You’re on the list, {submitted.businessName}
-            </h1>
-            <p className="mt-4 text-[var(--muted)]">
-              We received your <strong className="text-white">{submitted.planName}</strong>{" "}
-              application. Confirmation was sent to{" "}
-              <strong className="text-white">{submitted.email}</strong>. An admin will
-              review and email your login credentials after approval.
-            </p>
-            <Link
-              to="/"
-              className="mt-8 inline-flex rounded-full bg-[var(--gold)] px-6 py-3 text-sm font-bold text-[var(--night)]"
-            >
-              Back to KitchenOS
-            </Link>
-          </div>
-        </main>
-      </div>
-    );
+  function dismissSuccess() {
+    setSuccess(null);
+    navigate("/", { replace: true });
   }
 
   return (
@@ -189,7 +161,8 @@ export function RegisterPage() {
           </h1>
           <p className="mt-4 text-[var(--muted)]">
             Choose a plan, share your business details, and we’ll activate your
-            account after a quick review.
+            account after a quick review. You’ll get a confirmation email right
+            away.
           </p>
           {selectedPlan && (
             <div className="mt-8 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-6">
@@ -329,6 +302,15 @@ export function RegisterPage() {
         </form>
       </main>
 
+      {success && (
+        <RegistrationSuccessDialog
+          businessName={success.businessName}
+          email={success.email}
+          planName={success.plan.name}
+          onClose={dismissSuccess}
+        />
+      )}
+
       <style>{`
         .field {
           width: 100%;
@@ -344,6 +326,88 @@ export function RegisterPage() {
           box-shadow: 0 0 0 3px rgba(212,165,116,0.15);
         }
       `}</style>
+    </div>
+  );
+}
+
+function RegistrationSuccessDialog({
+  businessName,
+  email,
+  planName,
+  onClose,
+}: {
+  businessName: string;
+  email: string;
+  planName: string;
+  onClose: () => void;
+}) {
+  const titleId = useId();
+  const descId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    panelRef.current
+      ?.querySelector<HTMLElement>("button:not([disabled])")
+      ?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = prevOverflow;
+      previouslyFocused?.focus?.();
+    };
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <button
+        type="button"
+        aria-label="Dismiss"
+        className="absolute inset-0"
+        onClick={onClose}
+      />
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descId}
+        className="relative z-10 w-full max-w-md rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)] p-6 shadow-2xl"
+      >
+        <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
+          Submitted
+        </p>
+        <h2
+          id={titleId}
+          className="mt-2 font-[family-name:var(--font-display)] text-3xl text-white"
+        >
+          Check your email
+        </h2>
+        <p id={descId} className="mt-3 text-sm leading-relaxed text-[var(--muted)]">
+          Your <strong className="text-white">{planName}</strong> application for{" "}
+          <strong className="text-white">{businessName}</strong> was submitted
+          successfully. A confirmation was sent to{" "}
+          <strong className="text-white">{email}</strong>. After approval, you’ll
+          receive another email with your activation link and temporary password.
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-6 min-h-11 w-full rounded-full bg-[var(--gold)] px-5 py-2.5 text-sm font-bold text-[var(--night)] transition hover:bg-[var(--gold-soft)]"
+        >
+          Continue to homepage
+        </button>
+      </div>
     </div>
   );
 }
