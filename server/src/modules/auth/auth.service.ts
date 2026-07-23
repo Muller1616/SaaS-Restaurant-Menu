@@ -4,14 +4,22 @@ import { env } from "../../config/env.js";
 import { logActivity } from "../../lib/activity-log.js";
 import { signAccessToken } from "../../lib/jwt.js";
 import { toPublicMediaUrl } from "../../lib/media-url.js";
+import { generateSecurePassword } from "../../lib/password.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error.js";
-import { sendEmail } from "../../services/email.js";
+import { accountApprovedEmail, sendEmail } from "../../services/email.js";
+import { notifyTenant } from "../../services/notify.js";
+import { TRIAL_DAYS } from "../subscriptions/subscription.logic.js";
 import type {
+  ActivateTenantInput,
   AdminLoginInput,
   ChangePasswordInput,
   TenantLoginInput,
 } from "./auth.schemas.js";
+
+function hashToken(raw: string) {
+  return createHash("sha256").update(raw).digest("hex");
+}
 
 function serializeBranch(branch: {
   id: string;
@@ -249,6 +257,14 @@ export async function loginTenant(input: TenantLoginInput) {
     throw new AppError(403, "This account isn’t available for sign-in right now.");
   }
 
+  if (!tenant.activatedAt) {
+    throw new AppError(
+      403,
+      "Activate your account using the link we emailed you before signing in.",
+      { code: "MUST_ACTIVATE" },
+    );
+  }
+
   const token = signAccessToken(
     {
       sub: tenant.id,
@@ -312,6 +328,7 @@ export async function changeTenantPassword(
     data: {
       passwordHash,
       mustChangePassword: false,
+      activatedAt: tenant.activatedAt ?? new Date(),
     },
   });
 
@@ -327,13 +344,245 @@ export async function changeTenantPassword(
   return { success: true };
 }
 
+export async function previewTenantActivation(slug: string, token: string) {
+  const record = await findValidActivation(slug, token);
+  if (!record) {
+    return {
+      valid: false as const,
+      reason: "invalid" as const,
+      message:
+        "This activation link is invalid, already used, or has expired. Request a new activation email to continue.",
+    };
+  }
+
+  return {
+    valid: true as const,
+    businessName: record.tenant.businessName,
+    email: record.tenant.email,
+    expiresAt: record.expiresAt.toISOString(),
+  };
+}
+
+async function findValidActivation(slug: string, token: string) {
+  const tokenHash = hashToken(token);
+  const record = await prisma.activationToken.findFirst({
+    where: {
+      tokenHash,
+      usedAt: null,
+      expiresAt: { gt: new Date() },
+      tenant: {
+        slug,
+        status: "ACTIVE",
+        activatedAt: null,
+      },
+    },
+    include: {
+      tenant: {
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          businessName: true,
+          slug: true,
+          passwordHash: true,
+          status: true,
+          activatedAt: true,
+          selectedPlan: { select: { name: true } },
+          branches: {
+            where: { deletedAt: null, isDefault: true },
+            take: 1,
+            select: { name: true },
+          },
+        },
+      },
+    },
+  });
+  return record;
+}
+
+export async function activateTenantAccount(input: ActivateTenantInput) {
+  const record = await findValidActivation(input.slug, input.token);
+  if (!record || !record.tenant.passwordHash) {
+    throw new AppError(
+      400,
+      "This activation link is invalid, already used, or has expired. Request a new activation email to continue.",
+      { code: "ACTIVATION_INVALID" },
+    );
+  }
+
+  const tempOk = await bcrypt.compare(
+    input.temporaryPassword,
+    record.tenant.passwordHash,
+  );
+  if (!tempOk) {
+    throw new AppError(400, "Temporary password is incorrect");
+  }
+
+  if (input.temporaryPassword === input.newPassword) {
+    throw new AppError(
+      400,
+      "Choose a new password that is different from the temporary password",
+    );
+  }
+
+  const passwordHash = await bcrypt.hash(input.newPassword, 10);
+  const activatedAt = new Date();
+
+  await prisma.$transaction([
+    prisma.tenant.update({
+      where: { id: record.tenant.id },
+      data: {
+        passwordHash,
+        mustChangePassword: false,
+        activatedAt,
+      },
+    }),
+    prisma.activationToken.update({
+      where: { id: record.id },
+      data: { usedAt: activatedAt },
+    }),
+    prisma.activationToken.updateMany({
+      where: {
+        tenantId: record.tenant.id,
+        usedAt: null,
+        id: { not: record.id },
+      },
+      data: { usedAt: activatedAt },
+    }),
+  ]);
+
+  await logActivity({
+    userType: "TENANT",
+    userId: record.tenant.id,
+    action: "ACTIVATE",
+    entityType: "tenant",
+    entityId: record.tenant.id,
+    details: {
+      field: "activation",
+      activatedAt: activatedAt.toISOString(),
+    },
+  });
+
+  return {
+    message: "Account activated. You can sign in with your new password.",
+    loginUrl: `${env.clientUrl}/tenant/login`,
+  };
+}
+
+/**
+ * Public recovery: rotate temp password + send a fresh activation link.
+ * Always returns a generic message to avoid email enumeration.
+ */
+export async function requestTenantActivationEmail(email: string) {
+  const generic = {
+    message:
+      "If that email needs activation, we sent a new link with temporary credentials.",
+  };
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { email: email.toLowerCase().trim() },
+    include: {
+      selectedPlan: true,
+      branches: {
+        where: { deletedAt: null, isDefault: true },
+        take: 1,
+      },
+    },
+  });
+
+  if (
+    !tenant ||
+    tenant.status !== "ACTIVE" ||
+    tenant.activatedAt ||
+    !tenant.passwordHash
+  ) {
+    return generic;
+  }
+
+  const plainPassword = generateSecurePassword(12);
+  const passwordHash = await bcrypt.hash(plainPassword, 10);
+  const rawToken = randomBytes(32).toString("base64url");
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = new Date(
+    Date.now() + env.activationTokenHours * 60 * 60 * 1000,
+  );
+
+  await prisma.$transaction([
+    prisma.tenant.update({
+      where: { id: tenant.id },
+      data: {
+        passwordHash,
+        mustChangePassword: true,
+        activatedAt: null,
+      },
+    }),
+    prisma.activationToken.updateMany({
+      where: { tenantId: tenant.id, usedAt: null },
+      data: { usedAt: new Date() },
+    }),
+    prisma.activationToken.create({
+      data: {
+        tenantId: tenant.id,
+        tokenHash,
+        expiresAt,
+      },
+    }),
+  ]);
+
+  const activationUrl = `${env.clientUrl}/tenant/activate/${encodeURIComponent(tenant.slug)}/${encodeURIComponent(rawToken)}`;
+  const loginUrl = `${env.clientUrl}/tenant/login`;
+  const branchName = tenant.branches[0]?.name ?? tenant.businessName;
+  const emailContent = accountApprovedEmail({
+    fullName: tenant.fullName,
+    businessName: tenant.businessName,
+    email: tenant.email,
+    password: plainPassword,
+    planName: tenant.selectedPlan.name,
+    branchName,
+    loginUrl,
+    activationUrl,
+    activationHours: env.activationTokenHours,
+    trialDays: TRIAL_DAYS,
+  });
+
+  await notifyTenant({
+    tenantId: tenant.id,
+    type: "SYSTEM",
+    title: "New activation link",
+    message:
+      "A new account activation link was issued. Open the email to set your password.",
+    forceEmail: true,
+    email: {
+      subject: emailContent.subject,
+      text: emailContent.text,
+      html: emailContent.html,
+    },
+  });
+
+  await logActivity({
+    userType: "TENANT",
+    userId: tenant.id,
+    action: "UPDATE",
+    entityType: "tenant",
+    entityId: tenant.id,
+    details: { field: "activation_resend_public" },
+  });
+
+  return generic;
+}
+
 export async function requestTenantPasswordReset(email: string) {
   const tenant = await prisma.tenant.findUnique({
     where: { email: email.toLowerCase().trim() },
   });
 
   // Always return success to avoid email enumeration
-  if (!tenant || tenant.status !== "ACTIVE" || !tenant.passwordHash) {
+  if (
+    !tenant ||
+    tenant.status !== "ACTIVE" ||
+    !tenant.passwordHash ||
+    !tenant.activatedAt
+  ) {
     return { message: "If that email exists, a reset link has been sent." };
   }
 

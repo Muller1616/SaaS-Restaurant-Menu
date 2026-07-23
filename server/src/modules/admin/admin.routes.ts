@@ -18,6 +18,7 @@ import {
   bulkRejectSchema,
   rejectRegistration,
   rejectRegistrationSchema,
+  resendActivation,
 } from "./approval.service.js";
 import { z } from "zod";
 import { listSubscriptionHistoryById } from "../subscriptions/subscription-history.js";
@@ -151,6 +152,18 @@ adminRouter.post(
         req.user!.sub,
         parsed.data.reason,
       );
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+adminRouter.post(
+  "/tenants/:id/resend-activation",
+  async (req: AuthedRequest, res, next) => {
+    try {
+      const result = await resendActivation(String(req.params.id), req.user!.sub);
       res.json({ success: true, data: result });
     } catch (error) {
       next(error);

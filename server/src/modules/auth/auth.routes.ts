@@ -10,12 +10,16 @@ import { csrfTokenHandler } from "../../middleware/csrf.js";
 import { AppError } from "../../middleware/error.js";
 import {
   adminLoginSchema,
+  activateTenantSchema,
   changePasswordSchema,
   forgotPasswordSchema,
+  previewActivationSchema,
+  resendActivationEmailSchema,
   resetPasswordSchema,
   tenantLoginSchema,
 } from "./auth.schemas.js";
 import {
+  activateTenantAccount,
   changeTenantPassword,
   getAdminProfile,
   getTenantProfile,
@@ -23,6 +27,8 @@ import {
   loginTenant,
   logoutAdmin,
   logoutTenant,
+  previewTenantActivation,
+  requestTenantActivationEmail,
   requestTenantPasswordReset,
   resetTenantPassword,
 } from "./auth.service.js";
@@ -191,3 +197,57 @@ authRouter.post("/tenant/reset-password", passwordResetLimiter, async (req, res,
     next(error);
   }
 });
+
+const activationLimiter = createAuthLimiter(
+  "Too many activation attempts. Try again in 15 minutes.",
+  20,
+);
+
+authRouter.get("/tenant/activate", activationLimiter, async (req, res, next) => {
+  try {
+    const parsed = previewActivationSchema.safeParse({
+      slug: req.query.slug,
+      token: req.query.token,
+    });
+    if (!parsed.success) {
+      throw new AppError(400, "Invalid activation link", parsed.error.flatten());
+    }
+    const result = await previewTenantActivation(
+      parsed.data.slug,
+      parsed.data.token,
+    );
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+authRouter.post("/tenant/activate", activationLimiter, async (req, res, next) => {
+  try {
+    const parsed = activateTenantSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
+    }
+    const result = await activateTenantAccount(parsed.data);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+authRouter.post(
+  "/tenant/resend-activation",
+  passwordResetLimiter,
+  async (req, res, next) => {
+    try {
+      const parsed = resendActivationEmailSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
+      }
+      const result = await requestTenantActivationEmail(parsed.data.email);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
