@@ -80,8 +80,8 @@ export function AdminPlansPage() {
     onSuccess: async () => {
       setNotice("Plan updated.");
       setEditingId(null);
-      await queryClient.invalidateQueries({ queryKey: ["admin", "plans"] });
-      await queryClient.invalidateQueries({ queryKey: ["plans"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "plans"] });
+      void queryClient.invalidateQueries({ queryKey: ["plans"] });
     },
     onError: (err) =>
       setError(

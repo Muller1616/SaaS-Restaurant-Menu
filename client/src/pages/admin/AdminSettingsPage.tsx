@@ -53,7 +53,7 @@ export function AdminSettingsPage() {
         `Backup created: ${result.fileName} (${formatBytes(result.sizeBytes)}) via ${result.method}`,
       );
       setError(null);
-      await queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: ["admin", "database-backups"],
       });
     },
