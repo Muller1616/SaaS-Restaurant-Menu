@@ -3,8 +3,8 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
+import { MediaImage } from "../../components/MediaImage";
 import { api, type ApiSuccess } from "../../lib/api";
-import { assetUrl } from "../../lib/api-base";
 import { validateDeviceImage } from "../../lib/device-image";
 
 type Settings = {
@@ -65,7 +65,7 @@ export function TenantSettingsPage() {
     },
     onSuccess: async () => {
       setNotice("Settings saved");
-      await queryClient.invalidateQueries({ queryKey: ["tenant", "settings"] });
+      void queryClient.invalidateQueries({ queryKey: ["tenant", "settings"] });
       await refreshTenant();
     },
     onError: (err) =>
@@ -91,7 +91,7 @@ export function TenantSettingsPage() {
     onSuccess: async () => {
       setLogoFile(null);
       setNotice("Logo uploaded from your device");
-      await queryClient.invalidateQueries({ queryKey: ["tenant", "settings"] });
+      void queryClient.invalidateQueries({ queryKey: ["tenant", "settings"] });
     },
     onError: (err) =>
       setError(
@@ -108,7 +108,7 @@ export function TenantSettingsPage() {
     onSuccess: async () => {
       setLogoFile(null);
       setNotice("Logo removed");
-      await queryClient.invalidateQueries({ queryKey: ["tenant", "settings"] });
+      void queryClient.invalidateQueries({ queryKey: ["tenant", "settings"] });
     },
     onError: (err) =>
       setError(
@@ -118,8 +118,7 @@ export function TenantSettingsPage() {
       ),
   });
 
-  const displayLogo =
-    logoPreview ?? assetUrl(query.data?.logoUrl ?? null) ?? null;
+  const displayLogo = logoPreview ?? query.data?.logoUrl ?? null;
 
   return (
     <div className="space-y-6">
@@ -179,11 +178,19 @@ export function TenantSettingsPage() {
             <div className="mt-5 flex flex-wrap items-center gap-4">
               <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border border-[var(--line)] bg-black/25">
                 {displayLogo ? (
-                  <img
-                    src={displayLogo}
-                    alt="Restaurant logo"
-                    className="h-full w-full object-cover"
-                  />
+                  logoPreview ? (
+                    <img
+                      src={displayLogo}
+                      alt="Restaurant logo preview"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <MediaImage
+                      src={displayLogo}
+                      alt="Restaurant logo"
+                      className="h-full w-full object-cover"
+                    />
+                  )
                 ) : (
                   <span className="px-2 text-center text-xs text-[var(--muted)]">
                     No logo

@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { api, type ApiSuccess } from "../../lib/api";
-import { assetUrl } from "../../lib/api-base";
+import { refreshQueries } from "../../lib/refresh-queries";
+import { MediaImage } from "../../components/MediaImage";
 import { subscriptionStatusLabel } from "../../lib/status-labels";
 
 type QrPayload = {
@@ -91,12 +92,15 @@ export function TenantQrPage() {
       );
       return data.data;
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       setCacheBust(Date.now());
       setNotice("QR code refreshed for the current menu URL.");
       setError(null);
-      await queryClient.invalidateQueries({ queryKey: ["tenant", "qr"] });
-      await queryClient.invalidateQueries({ queryKey: ["tenant", "dashboard"] });
+      refreshQueries(
+        queryClient,
+        ["tenant", "qr"],
+        ["tenant", "dashboard"],
+      );
     },
     onError: (err) => {
       setError(
@@ -115,12 +119,15 @@ export function TenantQrPage() {
       );
       return data.data;
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       setCacheBust(Date.now());
       setNotice("Custom QR style saved and regenerated.");
       setError(null);
-      await queryClient.invalidateQueries({ queryKey: ["tenant", "qr"] });
-      await queryClient.invalidateQueries({ queryKey: ["tenant", "dashboard"] });
+      refreshQueries(
+        queryClient,
+        ["tenant", "qr"],
+        ["tenant", "dashboard"],
+      );
     },
     onError: (err) => {
       setError(
@@ -195,10 +202,11 @@ export function TenantQrPage() {
               className="mx-auto mt-8 w-full max-w-sm rounded-[1.5rem] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.25)]"
               style={{ background: qr.data.style.bgColor }}
             >
-              <img
-                src={`${assetUrl(qr.data.qrCodeUrl)}?v=${cacheBust}`}
+              <MediaImage
+                src={qr.data.qrCodeUrl}
                 alt={`${qr.data.branchName} QR code`}
                 className="aspect-square w-full object-contain"
+                cacheKey={cacheBust}
               />
             </div>
 
