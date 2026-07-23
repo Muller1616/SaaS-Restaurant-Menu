@@ -3,17 +3,22 @@ import path from "node:path";
 import { z } from "zod";
 import { env } from "../../config/env.js";
 import { logActivity } from "../../lib/activity-log.js";
+import {
+  invalidateCachesForBranch,
+  invalidatePublicMenuCache,
+} from "../../lib/cache/index.js";
 import { toPublicMediaUrl } from "../../lib/media-url.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error.js";
 import {
-  buildMenuUrl,
+  buildPublicQrUrl,
   DEFAULT_QR_BG,
   DEFAULT_QR_FG,
   generateBranchQr,
   normalizeHexColor,
   resolveUploadAbsolutePath,
 } from "../../services/qr.js";
+import { uniquePublicQrId } from "../../lib/slug.js";
 
 const hexColor = z
   .string()
@@ -88,29 +93,37 @@ function styleForGeneration(branch: {
   };
 }
 
-async function writeQrForBranch(branch: {
-  id: string;
-  slug: string;
-  qrFgColor: string | null;
-  qrBgColor: string | null;
-  qrUseLogo: boolean;
-  tenant: { slug: string; logoUrl: string | null };
-  subscription: { plan: { features: unknown } } | null;
-}) {
+async function writeQrForBranch(
+  branch: {
+    id: string;
+    publicQrId: string;
+    qrFgColor: string | null;
+    qrBgColor: string | null;
+    qrUseLogo: boolean;
+    tenant: { slug: string; logoUrl: string | null };
+    subscription: { plan: { features: unknown } } | null;
+  },
+  options?: { rotatePublicId?: boolean },
+) {
   const style = styleForGeneration(branch);
-  return generateBranchQr({
-    tenantSlug: branch.tenant.slug,
-    branchSlug: branch.slug,
+  const publicQrId = options?.rotatePublicId
+    ? await uniquePublicQrId()
+    : branch.publicQrId;
+
+  const generated = await generateBranchQr({
+    publicQrId,
     branchId: branch.id,
     fgColor: style.fgColor,
     bgColor: style.bgColor,
     logoPath: style.logoPath,
   });
+
+  return { ...generated, publicQrId };
 }
 
 export async function getBranchQr(tenantId: string, branchId: string) {
   const branch = await getBranchForTenant(tenantId, branchId);
-  const menuUrl = buildMenuUrl(branch.tenant.slug, branch.slug);
+  const menuUrl = buildPublicQrUrl(branch.publicQrId);
   const canCustomize = planHasCustomQr(branch.subscription?.plan.features);
 
   let qrCodeUrl = branch.qrCodeUrl;
@@ -127,7 +140,10 @@ export async function getBranchQr(tenantId: string, branchId: string) {
     qrSvgUrl = generated.qrSvgUrl;
     await prisma.branch.update({
       where: { id: branch.id },
-      data: { qrCodeUrl },
+      data: {
+        qrCodeUrl,
+        publicQrId: generated.publicQrId,
+      },
     });
   }
 
@@ -139,7 +155,10 @@ export async function getBranchQr(tenantId: string, branchId: string) {
     qrSvgUrl = generated.qrSvgUrl;
     await prisma.branch.update({
       where: { id: branch.id },
-      data: { qrCodeUrl },
+      data: {
+        qrCodeUrl,
+        publicQrId: generated.publicQrId,
+      },
     });
   }
 
@@ -151,6 +170,7 @@ export async function getBranchQr(tenantId: string, branchId: string) {
     businessName: branch.tenant.businessName,
     tenantSlug: branch.tenant.slug,
     branchSlug: branch.slug,
+    publicQrId: branch.publicQrId,
     menuUrl,
     qrCodeUrl: toPublicMediaUrl(qrCodeUrl ?? `/uploads/qr/${branch.id}.png`)!,
     qrSvgUrl: toPublicMediaUrl(qrSvgUrl)!,
@@ -174,11 +194,16 @@ export async function getBranchQr(tenantId: string, branchId: string) {
 
 export async function regenerateBranchQr(tenantId: string, branchId: string) {
   const branch = await getBranchForTenant(tenantId, branchId);
-  const generated = await writeQrForBranch(branch);
+  const previousPublicQrId = branch.publicQrId;
+  // Every regenerate issues a fresh opaque public QR identifier.
+  const generated = await writeQrForBranch(branch, { rotatePublicId: true });
 
   await prisma.branch.update({
     where: { id: branch.id },
-    data: { qrCodeUrl: generated.qrCodeUrl },
+    data: {
+      qrCodeUrl: generated.qrCodeUrl,
+      publicQrId: generated.publicQrId,
+    },
   });
 
   await logActivity({
@@ -190,12 +215,15 @@ export async function regenerateBranchQr(tenantId: string, branchId: string) {
     details: {
       regenerated: true,
       menuUrl: generated.menuUrl,
+      publicQrId: generated.publicQrId,
       fgColor: generated.fgColor,
       bgColor: generated.bgColor,
       usedLogo: generated.usedLogo,
     },
   });
 
+  await invalidatePublicMenuCache({ publicQrId: previousPublicQrId });
+  await invalidateCachesForBranch(branch.id);
   return getBranchQr(tenantId, branchId);
 }
 
