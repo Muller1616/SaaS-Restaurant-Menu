@@ -3,7 +3,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
-import { tenantPortalPath } from "../../lib/tenant-paths";
+import { publicQrPath, tenantPortalPath } from "../../lib/tenant-paths";
 import { api, type ApiSuccess } from "../../lib/api";
 import { refreshQueries } from "../../lib/refresh-queries";
 import { MediaImage } from "../../components/MediaImage";
@@ -17,6 +17,7 @@ type QrPayload = {
   businessName: string;
   tenantSlug: string;
   branchSlug: string;
+  publicQrId: string;
   menuUrl: string;
   qrCodeUrl: string;
   qrSvgUrl: string;
@@ -164,7 +165,7 @@ export function TenantQrPage() {
         </div>
         {qr.data && (
           <a
-            href={qr.data.menuUrl}
+            href={publicQrPath(qr.data.publicQrId)}
             target="_blank"
             rel="noreferrer"
             className="rounded-full border border-white/15 px-5 py-2.5 text-sm hover:border-[var(--gold)]"

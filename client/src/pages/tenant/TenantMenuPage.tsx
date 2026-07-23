@@ -13,6 +13,7 @@ import { validateDeviceImage } from "../../lib/device-image";
 import { formatEtb } from "../../lib/plans";
 import { refreshQueries } from "../../lib/refresh-queries";
 import { subscriptionStatusLabel } from "../../lib/status-labels";
+import { publicQrPath } from "../../lib/tenant-paths";
 
 const DESCRIPTION_MAX = 4000;
 
@@ -42,6 +43,7 @@ type MenuWorkspace = {
   canEdit: boolean;
   canAddItem: boolean;
   itemCount: number;
+  publicQrId: string;
   previewUrl: string;
   plan: { name: string; maxItems: number | null } | null;
   subscriptionStatus: string | null;
@@ -293,9 +295,9 @@ export function TenantMenuPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {menu.data?.previewUrl && (
+          {menu.data?.publicQrId && (
             <a
-              href={menu.data.previewUrl}
+              href={publicQrPath(menu.data.publicQrId)}
               target="_blank"
               rel="noreferrer"
               className="rounded-full border border-white/15 px-5 py-2.5 text-sm font-semibold hover:border-[var(--gold)]"
