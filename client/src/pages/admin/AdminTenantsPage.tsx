@@ -109,11 +109,11 @@ export function AdminTenantsPage() {
     },
     onSuccess: async () => {
       setReason("");
-      await queryClient.invalidateQueries({ queryKey: ["admin", "tenants"] });
-      await queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({ queryKey: ["admin", "tenants"] });
+      void queryClient.invalidateQueries({
         queryKey: ["admin", "tenant", selectedId],
       });
-      await queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
     },
     onError: (err) =>
       setError(
@@ -127,8 +127,8 @@ export function AdminTenantsPage() {
     mutationFn: async () => api.delete(`/admin/tenants/${selectedId}`),
     onSuccess: async () => {
       setSelectedId(null);
-      await queryClient.invalidateQueries({ queryKey: ["admin", "tenants"] });
-      await queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "tenants"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
     },
     onError: (err) =>
       setError(

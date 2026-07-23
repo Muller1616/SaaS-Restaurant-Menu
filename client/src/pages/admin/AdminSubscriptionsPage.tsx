@@ -99,8 +99,8 @@ export function AdminSubscriptionsPage() {
       await api.post(`/admin/subscriptions/${id}/extend`, { months });
     },
     onSuccess: async (_data, vars) => {
-      await queryClient.invalidateQueries({ queryKey: ["admin", "subscriptions"] });
-      await queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({ queryKey: ["admin", "subscriptions"] });
+      void queryClient.invalidateQueries({
         queryKey: ["admin", "subscription-history", vars.id],
       });
     },
@@ -123,8 +123,8 @@ export function AdminSubscriptionsPage() {
       await api.post(`/admin/subscriptions/${id}/status`, { status });
     },
     onSuccess: async (_data, vars) => {
-      await queryClient.invalidateQueries({ queryKey: ["admin", "subscriptions"] });
-      await queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({ queryKey: ["admin", "subscriptions"] });
+      void queryClient.invalidateQueries({
         queryKey: ["admin", "subscription-history", vars.id],
       });
     },
