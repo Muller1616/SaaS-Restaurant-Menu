@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error.js";
+import { cacheAside, CacheKeys, CacheTtl } from "../../lib/cache/index.js";
 
 export type AnalyticsTier = "basic" | "full" | "none";
 
@@ -31,26 +32,64 @@ function dayKey(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-function buildDailySeries(from: Date, days: number, timestamps: Date[]) {
-  const counts = new Map<string, number>();
+function buildDailySeries(
+  from: Date,
+  days: number,
+  dayCounts: Map<string, number>,
+) {
+  const series: Array<{ date: string; views: number }> = [];
   for (let i = 0; i < days; i += 1) {
-    counts.set(dayKey(addUtcDays(from, i)), 0);
+    const key = dayKey(addUtcDays(from, i));
+    series.push({ date: key, views: dayCounts.get(key) ?? 0 });
   }
-  for (const ts of timestamps) {
-    const key = dayKey(ts);
-    if (counts.has(key)) {
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-  }
-  return [...counts.entries()].map(([date, views]) => ({ date, views }));
+  return series;
 }
 
 export async function recordPublicMenuView(input: {
-  tenantSlug: string;
+  publicQrId?: string;
+  tenantSlug?: string;
   branchSlug?: string;
   userAgent?: string | null;
   referer?: string | null;
 }) {
+  if (input.publicQrId) {
+    const branch = await prisma.branch.findFirst({
+      where: {
+        publicQrId: input.publicQrId,
+        deletedAt: null,
+        isActive: true,
+      },
+      include: {
+        tenant: { select: { id: true, status: true } },
+        subscription: { select: { status: true } },
+      },
+    });
+    if (
+      !branch ||
+      branch.tenant.status === "REJECTED" ||
+      branch.tenant.status === "SUSPENDED"
+    ) {
+      throw new AppError(404, "Menu not found");
+    }
+    const status = branch.subscription?.status;
+    if (!status || ["EXPIRED", "SUSPENDED", "CANCELLED"].includes(status)) {
+      return { recorded: false as const };
+    }
+    await prisma.menuView.create({
+      data: {
+        tenantId: branch.tenant.id,
+        branchId: branch.id,
+        userAgent: input.userAgent?.slice(0, 255) || null,
+        referer: input.referer?.slice(0, 500) || null,
+      },
+    });
+    return { recorded: true as const };
+  }
+
+  if (!input.tenantSlug) {
+    throw new AppError(400, "Menu not found");
+  }
+
   const tenant = await prisma.tenant.findUnique({
     where: { slug: input.tenantSlug },
     select: { id: true, status: true },
@@ -122,44 +161,52 @@ export async function getBranchAnalytics(input: {
     );
   }
 
+  return cacheAside(
+    CacheKeys.branchAnalytics(branch.id, tier),
+    CacheTtl.branchAnalytics,
+    () => loadBranchAnalytics(branch.id, branch.name, tier),
+  );
+}
+
+async function loadBranchAnalytics(
+  branchId: string,
+  branchName: string,
+  tier: Exclude<AnalyticsTier, "none">,
+) {
   const now = new Date();
   const todayStart = startOfUtcDay(now);
   const windowDays = tier === "full" ? 30 : 7;
   const windowStart = addUtcDays(todayStart, -(windowDays - 1));
   const weekStart = addUtcDays(todayStart, -6);
 
-  const [todayCount, weekCount, windowRows, totalCount] = await Promise.all([
+  const [todayCount, weekCount, totalCount, dailyRows] = await Promise.all([
     prisma.menuView.count({
-      where: {
-        branchId: branch.id,
-        viewedAt: { gte: todayStart },
-      },
+      where: { branchId, viewedAt: { gte: todayStart } },
     }),
     prisma.menuView.count({
-      where: {
-        branchId: branch.id,
-        viewedAt: { gte: weekStart },
-      },
+      where: { branchId, viewedAt: { gte: weekStart } },
     }),
-    prisma.menuView.findMany({
-      where: {
-        branchId: branch.id,
-        viewedAt: { gte: windowStart },
-      },
-      select: {
-        viewedAt: true,
-        ...(tier === "full" ? { userAgent: true } : {}),
-      },
-      orderBy: { viewedAt: "asc" },
-    }),
-    prisma.menuView.count({ where: { branchId: branch.id } }),
+    prisma.menuView.count({ where: { branchId } }),
+    prisma.$queryRaw<Array<{ day: Date; views: bigint }>>`
+      SELECT date_trunc('day', "viewedAt" AT TIME ZONE 'UTC') AS day,
+             COUNT(*)::bigint AS views
+      FROM "MenuView"
+      WHERE "branchId" = ${branchId}
+        AND "viewedAt" >= ${windowStart}
+      GROUP BY 1
+      ORDER BY 1 ASC
+    `,
   ]);
 
-  const daily = buildDailySeries(
-    windowStart,
-    windowDays,
-    windowRows.map((row) => row.viewedAt),
-  );
+  const dayCounts = new Map<string, number>();
+  let windowTotal = 0;
+  for (const row of dailyRows) {
+    const views = Number(row.views);
+    dayCounts.set(dayKey(new Date(row.day)), views);
+    windowTotal += views;
+  }
+
+  const daily = buildDailySeries(windowStart, windowDays, dayCounts);
   const peak = daily.reduce(
     (best, row) => (row.views > best.views ? row : best),
     daily[0] ?? { date: dayKey(todayStart), views: 0 },
@@ -175,17 +222,33 @@ export async function getBranchAnalytics(input: {
   let devices: Array<{ device: string; views: number }> | null = null;
 
   if (tier === "full") {
-    const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, views: 0 }));
-    const deviceCounts = new Map<string, number>();
+    const [hourRows, uaRows] = await Promise.all([
+      prisma.$queryRaw<Array<{ hour: number; views: bigint }>>`
+        SELECT EXTRACT(HOUR FROM ("viewedAt" AT TIME ZONE 'UTC'))::int AS hour,
+               COUNT(*)::bigint AS views
+        FROM "MenuView"
+        WHERE "branchId" = ${branchId}
+          AND "viewedAt" >= ${windowStart}
+        GROUP BY 1
+        ORDER BY 1 ASC
+      `,
+      prisma.menuView.findMany({
+        where: { branchId, viewedAt: { gte: windowStart } },
+        select: { userAgent: true },
+      }),
+    ]);
 
-    for (const row of windowRows) {
-      hours[row.viewedAt.getUTCHours()]!.views += 1;
-      const device = classifyUserAgent(
-        "userAgent" in row ? (row.userAgent as string | null) : null,
-      );
-      deviceCounts.set(device, (deviceCounts.get(device) ?? 0) + 1);
+    const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, views: 0 }));
+    for (const row of hourRows) {
+      hours[row.hour]!.views = Number(row.views);
     }
     byHour = hours;
+
+    const deviceCounts = new Map<string, number>();
+    for (const row of uaRows) {
+      const device = classifyUserAgent(row.userAgent);
+      deviceCounts.set(device, (deviceCounts.get(device) ?? 0) + 1);
+    }
     devices = ["Mobile", "Desktop", "Tablet", "Unknown"]
       .map((device) => ({ device, views: deviceCounts.get(device) ?? 0 }))
       .filter((row) => row.views > 0);
@@ -193,13 +256,13 @@ export async function getBranchAnalytics(input: {
 
   return {
     tier,
-    branch: { id: branch.id, name: branch.name },
+    branch: { id: branchId, name: branchName },
     totals: {
       allTime: totalCount,
       today: todayCount,
       last7Days: weekCount,
       windowDays,
-      windowTotal: windowRows.length,
+      windowTotal,
       avgPerDay,
     },
     peakDay: peak,
