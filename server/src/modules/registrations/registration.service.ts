@@ -4,6 +4,12 @@ import { uniqueTenantSlug } from "../../lib/slug.js";
 import { AppError } from "../../middleware/error.js";
 import { registrationReceivedEmail } from "../../services/email.js";
 import { notifyTenant } from "../../services/notify.js";
+import {
+  cacheAside,
+  CacheKeys,
+  CacheTtl,
+  invalidateAdminDashboardCache,
+} from "../../lib/cache/index.js";
 import type { RegistrationInput } from "./registration.schemas.js";
 
 function serializePlan<T extends { priceMonthly: { toString(): string } }>(
@@ -16,11 +22,13 @@ function serializePlan<T extends { priceMonthly: { toString(): string } }>(
 }
 
 export async function listActivePlans() {
-  const plans = await prisma.plan.findMany({
-    where: { isActive: true },
-    orderBy: { priceMonthly: "asc" },
+  return cacheAside(CacheKeys.plansActive(), CacheTtl.plans, async () => {
+    const plans = await prisma.plan.findMany({
+      where: { isActive: true },
+      orderBy: { priceMonthly: "asc" },
+    });
+    return plans.map(serializePlan);
   });
-  return plans.map(serializePlan);
 }
 
 export async function createRegistration(
@@ -125,6 +133,7 @@ export async function createRegistration(
     },
   });
 
+  await invalidateAdminDashboardCache();
   return {
     id: tenant.id,
     fullName: tenant.fullName,
