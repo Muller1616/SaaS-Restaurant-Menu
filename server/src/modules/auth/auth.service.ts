@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { env } from "../../config/env.js";
 import { logActivity } from "../../lib/activity-log.js";
 import { signAccessToken } from "../../lib/jwt.js";
+import { toPublicMediaUrl } from "../../lib/media-url.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error.js";
 import { sendEmail } from "../../services/email.js";
@@ -41,7 +42,7 @@ function serializeBranch(branch: {
     location: branch.location,
     phone: branch.phone,
     slug: branch.slug,
-    qrCodeUrl: branch.qrCodeUrl,
+    qrCodeUrl: toPublicMediaUrl(branch.qrCodeUrl),
     isDefault: branch.isDefault,
     subscription: branch.subscription
       ? {

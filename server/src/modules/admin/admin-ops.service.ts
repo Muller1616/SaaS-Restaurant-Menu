@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { logActivity } from "../../lib/activity-log.js";
+import { toPublicMediaUrl } from "../../lib/media-url.js";
 import { parsePageParams, toPageResult } from "../../lib/pagination.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error.js";
@@ -59,7 +60,10 @@ export async function getTenantSettings(tenantId: string) {
     },
   });
   if (!tenant) throw new AppError(404, "Tenant not found");
-  return tenant;
+  return {
+    ...tenant,
+    logoUrl: toPublicMediaUrl(tenant.logoUrl),
+  };
 }
 
 /** Store restaurant logo from a device file upload (local path under /uploads/logos). */
@@ -87,7 +91,10 @@ export async function updateTenantLogo(
     details: { logoUrl },
   });
 
-  return tenant;
+  return {
+    ...tenant,
+    logoUrl: toPublicMediaUrl(tenant.logoUrl),
+  };
 }
 
 export async function removeTenantLogo(tenantId: string) {
@@ -109,7 +116,10 @@ export async function removeTenantLogo(tenantId: string) {
     entityId: tenantId,
   });
 
-  return tenant;
+  return {
+    ...tenant,
+    logoUrl: toPublicMediaUrl(tenant.logoUrl),
+  };
 }
 
 export const updateSettingsSchema = z.object({
