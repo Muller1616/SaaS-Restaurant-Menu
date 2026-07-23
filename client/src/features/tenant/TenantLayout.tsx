@@ -45,7 +45,8 @@ export function TenantLayout() {
   const unread = useQuery({
     queryKey: ["tenant", "notifications", "unread"],
     queryFn: fetchUnreadCount,
-    refetchInterval: 30_000,
+    staleTime: 45_000,
+    refetchInterval: 60_000,
   });
 
   const unreadCount = unread.data ?? 0;

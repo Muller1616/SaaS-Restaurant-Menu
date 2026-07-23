@@ -38,7 +38,7 @@ export function TenantSubscriptionBanner() {
     queryKey: ["tenant", "subscription", currentBranchId],
     queryFn: fetchSubscription,
     enabled: Boolean(currentBranchId),
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
 
   const sub = query.data;
