@@ -61,6 +61,8 @@ export const env = {
   clientUrl,
   publicAppUrl,
   publicApiUrl,
+  /** Hours until an approval activation link expires. */
+  activationTokenHours: Number(process.env.ACTIVATION_TOKEN_HOURS ?? 24),
   uploadDir: path.resolve(
     path.join(__dirname, "../.."),
     process.env.UPLOAD_DIR ?? "uploads",

@@ -319,6 +319,8 @@ export async function getAdminTenant(id: string) {
     businessLocation: tenant.businessLocation,
     businessDescription: tenant.businessDescription,
     status: tenant.status,
+    activatedAt: tenant.activatedAt,
+    mustChangePassword: tenant.mustChangePassword,
     suspendedReason: tenant.suspendedReason,
     rejectedReason: tenant.rejectedReason,
     createdAt: tenant.createdAt,
