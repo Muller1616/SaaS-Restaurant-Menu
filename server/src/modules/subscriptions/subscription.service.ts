@@ -122,7 +122,7 @@ export async function cancelBranchSubscription(input: {
     where: { id: input.branchId, tenantId: input.tenantId, deletedAt: null },
     include: {
       subscription: { include: { plan: true } },
-      tenant: { select: { fullName: true, businessName: true } },
+      tenant: { select: { fullName: true, businessName: true, slug: true } },
     },
   });
 
@@ -169,7 +169,7 @@ Your KitchenOS subscription for ${branch.name} (${branch.tenant.businessName}) h
 Your menu data will be retained until ${retainUntil.toDateString()} (${RETENTION_DAYS} days), then removed.
 
 You can renew from your dashboard to restore access before then:
-${env.clientUrl}/tenant/subscription
+${env.clientUrl}/r/${encodeURIComponent(branch.tenant.slug)}/subscription
 
 KitchenOS Team`,
     },

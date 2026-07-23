@@ -3,13 +3,12 @@ import path from "node:path";
 import QRCode from "qrcode";
 import sharp from "sharp";
 import { env } from "../config/env.js";
+import { buildPublicQrUrl } from "./qr-url.js";
 
 export const DEFAULT_QR_FG = "#0E1412";
 export const DEFAULT_QR_BG = "#FFFFFF";
 
-export function buildMenuUrl(tenantSlug: string, branchSlug: string) {
-  return `${env.publicAppUrl}/r/${tenantSlug}/${branchSlug}`;
-}
+export { buildMenuUrl, buildPublicQrUrl } from "./qr-url.js";
 
 export function normalizeHexColor(value: string | null | undefined, fallback: string) {
   if (!value) return fallback;
@@ -60,14 +59,13 @@ async function overlayLogo(pngPath: string, logoPath: string) {
 }
 
 export async function generateBranchQr(input: {
-  tenantSlug: string;
-  branchSlug: string;
+  publicQrId: string;
   branchId: string;
   fgColor?: string | null;
   bgColor?: string | null;
   logoPath?: string | null;
 }) {
-  const menuUrl = buildMenuUrl(input.tenantSlug, input.branchSlug);
+  const menuUrl = buildPublicQrUrl(input.publicQrId);
   const dir = path.join(env.uploadDir, "qr");
   await fs.mkdir(dir, { recursive: true });
 
@@ -109,6 +107,7 @@ export async function generateBranchQr(input: {
 
   return {
     menuUrl,
+    publicQrId: input.publicQrId,
     qrCodeUrl: `/uploads/qr/${pngName}`,
     qrSvgUrl: `/uploads/qr/${svgName}`,
     pngPath,

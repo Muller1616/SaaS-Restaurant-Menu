@@ -130,6 +130,7 @@ export async function createRegistration(
     fullName: tenant.fullName,
     email: tenant.email,
     businessName: tenant.businessName,
+    slug: tenant.slug,
     status: tenant.status,
     plan: {
       name: tenant.selectedPlan.name,

@@ -9,7 +9,7 @@ import {
   createRegistration,
   listActivePlans,
 } from "../registrations/registration.service.js";
-import { getPublicMenu } from "../menus/menu.service.js";
+import { getPublicMenu, getPublicMenuByQrId } from "../menus/menu.service.js";
 
 export const publicRouter = Router();
 
@@ -44,6 +44,34 @@ publicRouter.get("/plans", async (_req, res, next) => {
   }
 });
 
+/** Canonical customer menu — opaque QR public id only. */
+publicRouter.get("/public/qr/:publicQrId", async (req, res, next) => {
+  try {
+    const data = await getPublicMenuByQrId(String(req.params.publicQrId));
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+publicRouter.post(
+  "/public/qr/:publicQrId/views",
+  viewLimiter,
+  async (req, res, next) => {
+    try {
+      const data = await recordPublicMenuView({
+        publicQrId: String(req.params.publicQrId),
+        userAgent: req.get("user-agent"),
+        referer: req.get("referer"),
+      });
+      res.status(202).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/** @deprecated Legacy slug-based public menu (kept for old bookmarks). */
 publicRouter.get("/public/menu/:tenantSlug", async (req, res, next) => {
   try {
     const data = await getPublicMenu(String(req.params.tenantSlug));

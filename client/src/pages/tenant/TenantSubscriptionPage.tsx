@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { z } from "zod";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
+import { tenantPortalPath } from "../../lib/tenant-paths";
 import { api, type ApiSuccess } from "../../lib/api";
 import { validateDeviceImage } from "../../lib/device-image";
 import { formatEtb } from "../../lib/plans";
@@ -79,7 +80,8 @@ async function fetchHistory() {
 
 export function TenantSubscriptionPage() {
   const queryClient = useQueryClient();
-  const { currentBranchId } = useTenantAuth();
+  const { currentBranchId , tenant} = useTenantAuth();
+  const portal = (...segments: string[]) => tenantPortalPath(tenant?.slug ?? "", ...segments);
   const [renewOpen, setRenewOpen] = useState(false);
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -211,7 +213,7 @@ export function TenantSubscriptionPage() {
       {notice && (
         <div className="rounded-2xl bg-[rgba(61,186,138,0.12)] px-4 py-3 text-sm text-[var(--success)]">
           {notice}{" "}
-          <Link to="/tenant/payments" className="underline">
+          <Link to={portal("payments")} className="underline">
             View payments
           </Link>
         </div>
