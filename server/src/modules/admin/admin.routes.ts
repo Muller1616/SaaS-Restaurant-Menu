@@ -51,6 +51,8 @@ import {
   setTenantStatus,
   updatePlanAdmin,
   updatePlanSchema,
+  updateTenantSlug,
+  updateTenantSlugSchema,
 } from "./admin-ops.service.js";
 import { getAdminDashboardStats } from "./admin.service.js";
 
@@ -404,6 +406,27 @@ adminRouter.post(
         adminId: req.user!.sub,
         status: parsed.data.status,
         reason: parsed.data.reason,
+      });
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+adminRouter.patch(
+  "/tenants/:id/slug",
+  requireSuperAdmin,
+  async (req: AuthedRequest, res, next) => {
+    try {
+      const parsed = updateTenantSlugSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
+      }
+      const data = await updateTenantSlug({
+        tenantId: String(req.params.id),
+        adminId: req.user!.sub,
+        slug: parsed.data.slug,
       });
       res.json({ success: true, data });
     } catch (error) {

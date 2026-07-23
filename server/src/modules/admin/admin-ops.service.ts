@@ -1,9 +1,21 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { logActivity } from "../../lib/activity-log.js";
+import {
+  cacheAside,
+  CacheKeys,
+  CacheTtl,
+  invalidateCachesForTenant,
+  invalidatePlansCache,
+  invalidatePublicMenuCache,
+} from "../../lib/cache/index.js";
 import { toPublicMediaUrl } from "../../lib/media-url.js";
 import { parsePageParams, toPageResult } from "../../lib/pagination.js";
 import { prisma } from "../../lib/prisma.js";
+import {
+  assertValidTenantSlugFormat,
+  isTenantSlugTaken,
+} from "../../lib/slug.js";
 import { AppError } from "../../middleware/error.js";
 import { notifyTenant } from "../../services/notify.js";
 
@@ -42,28 +54,34 @@ export async function markAllNotificationsRead(tenantId: string) {
 }
 
 export async function getTenantSettings(tenantId: string) {
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: {
-      id: true,
-      fullName: true,
-      email: true,
-      phone: true,
-      businessName: true,
-      businessLocation: true,
-      businessDescription: true,
-      logoUrl: true,
-      emailNotificationsEnabled: true,
-      selectedPlan: {
-        select: { name: true, slug: true },
-      },
+  return cacheAside(
+    CacheKeys.tenantSettings(tenantId),
+    CacheTtl.tenantSettings,
+    async () => {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          phone: true,
+          businessName: true,
+          businessLocation: true,
+          businessDescription: true,
+          logoUrl: true,
+          emailNotificationsEnabled: true,
+          selectedPlan: {
+            select: { name: true, slug: true },
+          },
+        },
+      });
+      if (!tenant) throw new AppError(404, "Tenant not found");
+      return {
+        ...tenant,
+        logoUrl: toPublicMediaUrl(tenant.logoUrl),
+      };
     },
-  });
-  if (!tenant) throw new AppError(404, "Tenant not found");
-  return {
-    ...tenant,
-    logoUrl: toPublicMediaUrl(tenant.logoUrl),
-  };
+  );
 }
 
 /** Store restaurant logo from a device file upload (local path under /uploads/logos). */
@@ -91,6 +109,7 @@ export async function updateTenantLogo(
     details: { logoUrl },
   });
 
+  await invalidateCachesForTenant(tenantId);
   return {
     ...tenant,
     logoUrl: toPublicMediaUrl(tenant.logoUrl),
@@ -116,6 +135,7 @@ export async function removeTenantLogo(tenantId: string) {
     entityId: tenantId,
   });
 
+  await invalidateCachesForTenant(tenantId);
   return {
     ...tenant,
     logoUrl: toPublicMediaUrl(tenant.logoUrl),
@@ -165,6 +185,7 @@ export async function updateTenantSettings(
     details: input,
   });
 
+  await invalidateCachesForTenant(tenantId);
   return tenant;
 }
 
@@ -240,6 +261,7 @@ export async function listAdminTenants(filters: {
         phone: tenant.phone,
         businessName: tenant.businessName,
         businessLocation: tenant.businessLocation,
+        slug: tenant.slug,
         status: tenant.status,
         suspendedReason: tenant.suspendedReason,
         createdAt: tenant.createdAt,
@@ -276,6 +298,7 @@ export async function listAdminTenants(filters: {
       phone: tenant.phone,
       businessName: tenant.businessName,
       businessLocation: tenant.businessLocation,
+      slug: tenant.slug,
       status: tenant.status,
       suspendedReason: tenant.suspendedReason,
       createdAt: tenant.createdAt,
@@ -318,12 +341,16 @@ export async function getAdminTenant(id: string) {
     businessName: tenant.businessName,
     businessLocation: tenant.businessLocation,
     businessDescription: tenant.businessDescription,
+    slug: tenant.slug,
     status: tenant.status,
     activatedAt: tenant.activatedAt,
     mustChangePassword: tenant.mustChangePassword,
     suspendedReason: tenant.suspendedReason,
     rejectedReason: tenant.rejectedReason,
     createdAt: tenant.createdAt,
+    portalUrl: `/r/${tenant.slug}/dashboard`,
+    // Public menu uses opaque QR ids — not the tenant slug.
+    publicMenuUrl: null as string | null,
     plan: {
       name: tenant.selectedPlan.name,
       slug: tenant.selectedPlan.slug,
@@ -339,6 +366,83 @@ export async function getAdminTenant(id: string) {
       planName: branch.subscription?.plan.name ?? null,
       expiryDate: branch.subscription?.expiryDate ?? null,
     })),
+  };
+}
+
+export const updateTenantSlugSchema = z.object({
+  slug: z
+    .string()
+    .trim()
+    .min(2)
+    .max(100)
+    .transform((value) => value.toLowerCase()),
+});
+
+/**
+ * Super-admin only slug change. QR public ids are independent of tenant slug
+ * and are left unchanged so customer QR links keep working.
+ */
+export async function updateTenantSlug(input: {
+  tenantId: string;
+  adminId: string;
+  slug: string;
+}) {
+  const formatError = assertValidTenantSlugFormat(input.slug);
+  if (formatError) {
+    throw new AppError(400, formatError);
+  }
+  if (await isTenantSlugTaken(input.slug, input.tenantId)) {
+    throw new AppError(409, "This restaurant slug is already in use");
+  }
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: input.tenantId },
+  });
+  if (!tenant) throw new AppError(404, "Tenant not found");
+
+  const previousSlug = tenant.slug;
+  if (previousSlug === input.slug) {
+    return {
+      id: tenant.id,
+      slug: tenant.slug,
+      portalUrl: `/r/${tenant.slug}/dashboard`,
+    };
+  }
+
+  await prisma.tenant.update({
+    where: { id: tenant.id },
+    data: { slug: input.slug },
+  });
+
+  // Invalidate unused activation emails that still contain the old slug path.
+  await prisma.activationToken.updateMany({
+    where: { tenantId: tenant.id, usedAt: null },
+    data: { usedAt: new Date() },
+  });
+
+  await logActivity({
+    userType: "ADMIN",
+    userId: input.adminId,
+    action: "UPDATE",
+    entityType: "tenant",
+    entityId: tenant.id,
+    details: {
+      field: "slug",
+      from: previousSlug,
+      to: input.slug,
+    },
+  });
+
+  // Old slug paths + settings must not serve stale public menus.
+  await invalidateCachesForTenant(tenant.id);
+  await invalidatePublicMenuCache({
+    tenantSlug: previousSlug,
+  });
+
+  return {
+    id: tenant.id,
+    slug: input.slug,
+    portalUrl: `/r/${input.slug}/dashboard`,
   };
 }
 
@@ -398,6 +502,7 @@ export async function setTenantStatus(input: {
     details: { reason: input.reason ?? null },
   });
 
+  await invalidateCachesForTenant(tenant.id);
   return updated;
 }
 
@@ -405,6 +510,7 @@ export async function deleteTenant(tenantId: string, adminId: string) {
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
   if (!tenant) throw new AppError(404, "Tenant not found");
 
+  await invalidateCachesForTenant(tenantId);
   await prisma.tenant.delete({ where: { id: tenantId } });
 
   await logActivity({
@@ -486,6 +592,7 @@ export async function updatePlanAdmin(
     details: input,
   });
 
+  await invalidatePlansCache();
   return {
     id: updated.id,
     name: updated.name,

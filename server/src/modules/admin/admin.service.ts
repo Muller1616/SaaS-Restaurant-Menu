@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma.js";
+import { cacheAside, CacheKeys, CacheTtl } from "../../lib/cache/index.js";
 
 function startOfUtcDay(date: Date) {
   return new Date(
@@ -32,6 +33,14 @@ function seriesFromMap(counts: Map<string, number>, valueKey: string) {
 }
 
 export async function getAdminDashboardStats() {
+  return cacheAside(
+    CacheKeys.adminDashboard(),
+    CacheTtl.adminDashboard,
+    loadAdminDashboardStats,
+  );
+}
+
+async function loadAdminDashboardStats() {
   const now = new Date();
   const inSevenDays = new Date(now);
   inSevenDays.setDate(inSevenDays.getDate() + 7);

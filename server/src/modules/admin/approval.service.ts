@@ -3,9 +3,10 @@ import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { env } from "../../config/env.js";
 import { logActivity } from "../../lib/activity-log.js";
+import { invalidateAdminDashboardCache } from "../../lib/cache/index.js";
 import { generateSecurePassword } from "../../lib/password.js";
 import { prisma } from "../../lib/prisma.js";
-import { toSlug } from "../../lib/slug.js";
+import { toSlug, uniquePublicQrId } from "../../lib/slug.js";
 import { AppError } from "../../middleware/error.js";
 import {
   accountApprovedEmail,
@@ -38,7 +39,7 @@ async function issueActivationToken(tenantId: string, slug: string) {
     }),
   ]);
 
-  const activationUrl = `${env.clientUrl}/tenant/activate/${encodeURIComponent(slug)}/${encodeURIComponent(rawToken)}`;
+  const activationUrl = `${env.clientUrl}/r/${encodeURIComponent(slug)}/activate/${encodeURIComponent(rawToken)}`;
   return { activationUrl, expiresAt };
 }
 
@@ -90,6 +91,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
 
   const branchName = tenant.businessName;
   const branchSlug = toSlug(branchName) || "main";
+  const publicQrId = await uniquePublicQrId();
   const now = new Date();
   const durationMonths = pendingPayment?.durationMonths ?? 1;
   // FR-6.1: every approval starts a 14-day TRIAL; paid months begin after trial ends.
@@ -114,6 +116,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
         location: tenant.businessLocation,
         phone: tenant.phone,
         slug: branchSlug,
+        publicQrId,
         isActive: true,
         isDefault: true,
       },
@@ -146,8 +149,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
   });
 
   const qr = await generateBranchQr({
-    tenantSlug: tenant.slug,
-    branchSlug: result.branch.slug,
+    publicQrId: result.branch.publicQrId,
     branchId: result.branch.id,
   });
 
@@ -224,6 +226,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
     },
   });
 
+  await invalidateAdminDashboardCache();
   return {
     id: tenant.id,
     email: tenant.email,
@@ -236,11 +239,13 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
       qrCodeUrl: qr.qrCodeUrl,
       menuUrl: qr.menuUrl,
     },
+    portalUrl: `/r/${tenant.slug}/dashboard`,
     // One-time reveal for the approving admin UI (also emailed). Never logged.
     temporaryPassword: plainPassword,
     activationUrl,
     loginUrl,
     emailDelivered: notifyResult.emailed,
+    publicMenuUrl: qr.menuUrl,
   };
 }
 
@@ -403,6 +408,7 @@ async function rejectSingleRegistration(
     },
   });
 
+  await invalidateAdminDashboardCache();
   return {
     id: updated.id,
     email: updated.email,
