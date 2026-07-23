@@ -529,7 +529,7 @@ export async function requestTenantActivationEmail(email: string) {
     }),
   ]);
 
-  const activationUrl = `${env.clientUrl}/tenant/activate/${encodeURIComponent(tenant.slug)}/${encodeURIComponent(rawToken)}`;
+  const activationUrl = `${env.clientUrl}/r/${encodeURIComponent(tenant.slug)}/activate/${encodeURIComponent(rawToken)}`;
   const loginUrl = `${env.clientUrl}/tenant/login`;
   const branchName = tenant.branches[0]?.name ?? tenant.businessName;
   const emailContent = accountApprovedEmail({
