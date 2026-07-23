@@ -1,14 +1,18 @@
 import { z } from "zod";
-import { env } from "../../config/env.js";
 import { logActivity } from "../../lib/activity-log.js";
+import {
+  invalidateAdminDashboardCache,
+  invalidateCachesForBranch,
+  invalidatePublicMenuCache,
+} from "../../lib/cache/index.js";
 import { toPublicMediaUrl } from "../../lib/media-url.js";
 import { prisma } from "../../lib/prisma.js";
-import { uniqueBranchSlug } from "../../lib/slug.js";
+import { uniqueBranchSlug, uniquePublicQrId } from "../../lib/slug.js";
 import { AppError } from "../../middleware/error.js";
 import { notifyTenant } from "../../services/notify.js";
 import {
   generateBranchQr,
-  resolveUploadAbsolutePath,
+  buildPublicQrUrl,
 } from "../../services/qr.js";
 import { recordSubscriptionEvent } from "../subscriptions/subscription-history.js";
 
@@ -145,6 +149,7 @@ export async function createBranch(tenantId: string, input: BranchInput) {
 
   const isPaid = Number(tenant.selectedPlan.priceMonthly) > 0;
   const slug = await uniqueBranchSlug(tenantId, input.name);
+  const publicQrId = await uniquePublicQrId();
   const now = new Date();
 
   // Paid new branches stay EXPIRED until payment/renewal (public menu locked).
@@ -178,6 +183,7 @@ export async function createBranch(tenantId: string, input: BranchInput) {
         location: input.location.trim(),
         phone: input.phone?.trim() || tenant.phone,
         slug,
+        publicQrId,
         isActive: true,
         isDefault: false,
       },
@@ -198,8 +204,7 @@ export async function createBranch(tenantId: string, input: BranchInput) {
   });
 
   const qr = await generateBranchQr({
-    tenantSlug: tenant.slug,
-    branchSlug: branch.created.slug,
+    publicQrId: branch.created.publicQrId,
     branchId: branch.created.id,
   });
 
@@ -257,6 +262,7 @@ KitchenOS Team`,
     details: { name: updated.name, status },
   });
 
+  await invalidateAdminDashboardCache();
   return {
     ...serializeBranch(updated),
     menuUrl: qr.menuUrl,
@@ -301,42 +307,23 @@ export async function updateBranch(
   });
 
   if (slug !== existing.slug) {
-    const features = updated.subscription?.plan.features as
-      | { customQr?: boolean }
-      | null;
-    const canCustomize = Boolean(features?.customQr);
-    const qr = await generateBranchQr({
-      tenantSlug: tenant.slug,
-      branchSlug: updated.slug,
-      branchId: updated.id,
-      fgColor: canCustomize ? existing.qrFgColor : null,
-      bgColor: canCustomize ? existing.qrBgColor : null,
-      logoPath:
-        canCustomize && existing.qrUseLogo
-          ? resolveUploadAbsolutePath(tenant.logoUrl)
-          : null,
-    });
-    const withQr = await prisma.branch.update({
-      where: { id: updated.id },
-      data: { qrCodeUrl: qr.qrCodeUrl },
-      include: {
-        subscription: { include: { plan: true } },
-        _count: { select: { menuItems: { where: { deletedAt: null } } } },
-      },
-    });
-
     await logActivity({
       userType: "TENANT",
       userId: tenantId,
       action: "UPDATE",
       entityType: "branch",
       entityId: branchId,
-      details: { regeneratedQr: true },
+      details: { field: "slug", from: existing.slug, to: slug },
     });
-
+    await invalidatePublicMenuCache({
+      publicQrId: updated.publicQrId,
+      tenantSlug: tenant.slug,
+      branchSlug: existing.slug,
+    });
+    await invalidateCachesForBranch(branchId);
     return {
-      ...serializeBranch(withQr),
-      menuUrl: `${env.publicAppUrl}/r/${tenant.slug}/${withQr.slug}`,
+      ...serializeBranch(updated),
+      menuUrl: buildPublicQrUrl(updated.publicQrId),
     };
   }
 
@@ -348,6 +335,7 @@ export async function updateBranch(
     entityId: branchId,
   });
 
+  await invalidateCachesForBranch(branchId);
   return serializeBranch(updated);
 }
 
@@ -397,5 +385,6 @@ export async function softDeleteBranch(tenantId: string, branchId: string) {
     details: { softDelete: true, name: deleted.name },
   });
 
+  await invalidateCachesForBranch(branchId);
   return { id: deleted.id, deleted: true };
 }
