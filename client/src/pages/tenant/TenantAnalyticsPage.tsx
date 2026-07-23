@@ -48,7 +48,8 @@ export function TenantAnalyticsPage() {
     queryFn: fetchAnalytics,
     enabled: Boolean(currentBranchId) && !locked,
     retry: false,
-    refetchInterval: locked ? false : 30_000,
+    staleTime: 60_000,
+    refetchInterval: locked ? false : 90_000,
   });
 
   const lockedMessage = axios.isAxiosError(query.error)

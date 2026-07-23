@@ -57,7 +57,8 @@ export function TenantDashboardPage() {
   const dashboard = useQuery({
     queryKey: ["tenant", "dashboard", currentBranchId],
     queryFn: fetchDashboard,
-    refetchInterval: 60_000,
+    staleTime: 45_000,
+    refetchInterval: 90_000,
   });
 
   const branch = dashboard.data?.currentBranch;

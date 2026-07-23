@@ -95,7 +95,8 @@ export function AdminDashboardPage() {
   const stats = useQuery({
     queryKey: ["admin", "dashboard", "stats"],
     queryFn: fetchStats,
-    refetchInterval: 60_000,
+    staleTime: 45_000,
+    refetchInterval: 90_000,
   });
 
   return (
@@ -109,7 +110,7 @@ export function AdminDashboardPage() {
         </h1>
         <p className="mt-1 text-[var(--muted)]">
           Live snapshot of restaurants, plans, payments, and menu views.
-          Refreshes every minute.
+          Refreshes about every 90 seconds.
         </p>
       </div>
 
