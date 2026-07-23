@@ -2,8 +2,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   BrowserRouter,
   Navigate,
+  Outlet,
   Route,
   Routes,
+  useLocation,
   useParams,
 } from "react-router-dom";
 import { AdminAuthProvider } from "./features/admin/AdminAuthContext";
@@ -12,7 +14,10 @@ import { RequireAdminAuth } from "./features/admin/RequireAdminAuth";
 import { NavigationHistoryProvider } from "./features/navigation/NavigationHistoryContext";
 import { RouteTransitionOutlet } from "./features/navigation/PageTransition";
 import { RequireTenantAuth } from "./features/tenant/RequireTenantAuth";
-import { TenantAuthProvider } from "./features/tenant/TenantAuthContext";
+import {
+  TenantAuthProvider,
+  useTenantAuth,
+} from "./features/tenant/TenantAuthContext";
 import { TenantLayout } from "./features/tenant/TenantLayout";
 import { AdminActivityPage } from "./pages/admin/AdminActivityPage";
 import { AdminApprovalsPage } from "./pages/admin/AdminApprovalsPage";
@@ -42,6 +47,11 @@ import { TenantQrPage } from "./pages/tenant/TenantQrPage";
 import { TenantResetPasswordPage } from "./pages/tenant/TenantResetPasswordPage";
 import { TenantSettingsPage } from "./pages/tenant/TenantSettingsPage";
 import { TenantSubscriptionPage } from "./pages/tenant/TenantSubscriptionPage";
+import {
+  looksLikeActivationToken,
+  TENANT_PORTAL_SEGMENTS,
+  tenantPortalPath,
+} from "./lib/tenant-paths";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,6 +72,52 @@ function MenuPathAlias() {
   return <Navigate to={to} replace />;
 }
 
+/** Old `/tenant/activate/:slug/:token` → `/:slug/:token`. */
+function LegacyActivateRedirect() {
+  const { slug, token } = useParams();
+  if (!slug || !token) return <Navigate to="/tenant/login" replace />;
+  return <Navigate to={`/${slug}/${token}`} replace />;
+}
+
+/** Old `/tenant/*` portal paths → `/{restaurant-slug}/*`. */
+function LegacyTenantPortalRedirect() {
+  const { isAuthenticated, tenant } = useTenantAuth();
+  const location = useLocation();
+
+  if (!isAuthenticated || !tenant?.slug) {
+    return (
+      <Navigate to="/tenant/login" replace state={{ from: location }} />
+    );
+  }
+
+  const rest = location.pathname.replace(/^\/tenant\/?/, "");
+  const target = rest
+    ? tenantPortalPath(tenant.slug, ...rest.split("/").filter(Boolean))
+    : tenantPortalPath(tenant.slug);
+
+  return <Navigate to={`${target}${location.search}`} replace />;
+}
+
+/**
+ * `/{slug}/{token}` activation. Portal static segments (menu, qr, …) rank higher
+ * and never reach this route.
+ */
+function TenantActivationGate() {
+  const { tenantSlug, activationToken } = useParams();
+  if (!tenantSlug || !activationToken) {
+    return <Navigate to="/" replace />;
+  }
+  if (TENANT_PORTAL_SEGMENTS.has(activationToken)) {
+    return (
+      <Navigate to={tenantPortalPath(tenantSlug, activationToken)} replace />
+    );
+  }
+  if (!looksLikeActivationToken(activationToken)) {
+    return <Navigate to="/" replace />;
+  }
+  return <TenantActivatePage />;
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -70,7 +126,6 @@ export default function App() {
           <AdminAuthProvider>
             <TenantAuthProvider>
               <Routes>
-                {/* Standalone pages — stable content frame (no remount fade) */}
                 <Route element={<RouteTransitionOutlet />}>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/register" element={<RegisterPage />} />
@@ -86,10 +141,6 @@ export default function App() {
                   />
                   <Route path="/tenant/login" element={<TenantLoginPage />} />
                   <Route
-                    path="/tenant/activate/:slug/:token"
-                    element={<TenantActivatePage />}
-                  />
-                  <Route
                     path="/tenant/forgot-password"
                     element={<TenantForgotPasswordPage />}
                   />
@@ -97,32 +148,59 @@ export default function App() {
                     path="/tenant/reset-password"
                     element={<TenantResetPasswordPage />}
                   />
+                  <Route
+                    path="/tenant/activate/:slug/:token"
+                    element={<LegacyActivateRedirect />}
+                  />
                   <Route path="/admin/login" element={<AdminLoginPage />} />
                 </Route>
 
-                <Route path="/tenant" element={<RequireTenantAuth />}>
+                <Route path="/tenant" element={<LegacyTenantPortalRedirect />} />
+                <Route
+                  path="/tenant/*"
+                  element={<LegacyTenantPortalRedirect />}
+                />
+
+                {/*
+                  Slug workspace: /{slug}
+                  Activation:     /{slug}/{secure-token}
+                  Public menu:    /r/{slug}  (declared above)
+                */}
+                <Route path="/:tenantSlug" element={<Outlet />}>
                   <Route element={<RouteTransitionOutlet />}>
                     <Route
-                      path="change-password"
-                      element={<TenantChangePasswordPage />}
+                      path=":activationToken"
+                      element={<TenantActivationGate />}
                     />
                   </Route>
-                  <Route element={<TenantLayout />}>
-                    <Route index element={<TenantDashboardPage />} />
-                    <Route path="branches" element={<TenantBranchesPage />} />
-                    <Route path="menu" element={<TenantMenuPage />} />
-                    <Route path="qr" element={<TenantQrPage />} />
-                    <Route path="analytics" element={<TenantAnalyticsPage />} />
-                    <Route
-                      path="subscription"
-                      element={<TenantSubscriptionPage />}
-                    />
-                    <Route path="payments" element={<TenantPaymentsPage />} />
-                    <Route
-                      path="notifications"
-                      element={<TenantNotificationsPage />}
-                    />
-                    <Route path="settings" element={<TenantSettingsPage />} />
+
+                  <Route element={<RequireTenantAuth />}>
+                    <Route element={<RouteTransitionOutlet />}>
+                      <Route
+                        path="change-password"
+                        element={<TenantChangePasswordPage />}
+                      />
+                    </Route>
+                    <Route element={<TenantLayout />}>
+                      <Route index element={<TenantDashboardPage />} />
+                      <Route path="branches" element={<TenantBranchesPage />} />
+                      <Route path="menu" element={<TenantMenuPage />} />
+                      <Route path="qr" element={<TenantQrPage />} />
+                      <Route
+                        path="analytics"
+                        element={<TenantAnalyticsPage />}
+                      />
+                      <Route
+                        path="subscription"
+                        element={<TenantSubscriptionPage />}
+                      />
+                      <Route path="payments" element={<TenantPaymentsPage />} />
+                      <Route
+                        path="notifications"
+                        element={<TenantNotificationsPage />}
+                      />
+                      <Route path="settings" element={<TenantSettingsPage />} />
+                    </Route>
                   </Route>
                 </Route>
 
