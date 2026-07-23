@@ -11,7 +11,7 @@ export function AdminPagination({
   total,
   onPageChange,
 }: Props) {
-  if (total === 0) return null;
+  if (total === 0 || totalPages <= 1) return null;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 text-sm">

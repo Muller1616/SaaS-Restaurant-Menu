@@ -204,13 +204,49 @@ function buildSummary(input: {
 }) {
   const verb = ACTION_PHRASE[input.action] ?? input.action.toLowerCase();
   const entity = entityPhrase(input.entityType);
+  const shortActor =
+    input.actorLabel.split("<")[0]?.split("·")[0]?.trim() || input.actorLabel;
+  const shortEntity = input.entityLabel
+    ? input.entityLabel.split("<")[0]?.split("·")[0]?.trim() || input.entityLabel
+    : null;
+
   if (input.action === "LOGIN" || input.action === "LOGOUT") {
-    return `${input.actorLabel} ${verb}`;
+    return `${shortActor} ${verb}`;
   }
-  if (input.entityLabel) {
-    return `${input.actorLabel} ${verb} ${entity}: ${input.entityLabel}`;
+
+  if (input.entityType === "tenant" && input.action === "APPROVE" && shortEntity) {
+    return `Restaurant "${shortEntity}" was approved`;
   }
-  return `${input.actorLabel} ${verb} ${entity}`;
+  if (input.entityType === "tenant" && input.action === "REJECT" && shortEntity) {
+    return `Restaurant "${shortEntity}" was declined`;
+  }
+  if (input.entityType === "tenant" && input.action === "SUSPEND" && shortEntity) {
+    return `Restaurant "${shortEntity}" was suspended`;
+  }
+  if (
+    (input.entityType === "branch_qr" || input.entityType === "branch_qr_style") &&
+    (input.action === "UPDATE" || input.action === "CREATE")
+  ) {
+    return "QR code regenerated successfully";
+  }
+  if (input.entityType === "menu_item" && input.action === "CREATE" && shortEntity) {
+    return `Menu item "${shortEntity}" was created`;
+  }
+  if (input.entityType === "payment" && input.action === "APPROVE") {
+    return shortEntity
+      ? `Payment for ${shortEntity} was approved`
+      : "Payment was approved";
+  }
+  if (input.entityType === "payment" && input.action === "REJECT") {
+    return shortEntity
+      ? `Payment for ${shortEntity} was declined`
+      : "Payment was declined";
+  }
+
+  if (shortEntity) {
+    return `${shortActor} ${verb} ${entity}: ${shortEntity}`;
+  }
+  return `${shortActor} ${verb} ${entity}`;
 }
 
 /**

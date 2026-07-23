@@ -1,13 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { AdminPagination } from "../../components/AdminPagination";
+import { formatActivitySummary } from "../../lib/activity-summary";
 import { api, type ApiSuccess } from "../../lib/api";
+import { formatAdminDateTime } from "../../lib/datetime";
 import {
   activityActionLabel,
   activityActorLabel,
 } from "../../lib/status-labels";
 
-const ACTIVITY_PAGE_SIZE = 11;
+const ACTIVITY_PAGE_SIZE = 9;
 
 type Log = {
   id: string;
@@ -38,14 +40,9 @@ function entityTypeLabel(value: string) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function formatDetails(details: unknown) {
-  if (details == null) return "—";
-  if (typeof details === "string") return details;
-  try {
-    return JSON.stringify(details, null, 0);
-  } catch {
-    return "—";
-  }
+function shortActor(log: Log) {
+  const raw = log.actorLabel || activityActorLabel(log.userType);
+  return raw.split("<")[0]?.split("·")[0]?.trim() || raw;
 }
 
 async function fetchLogs(page: number) {
@@ -102,27 +99,22 @@ export function AdminActivityPage() {
                 className="border-t border-[var(--line)] hover:bg-white/4"
               >
                 <td className="px-4 py-3 whitespace-nowrap text-white/85">
-                  {new Date(log.createdAt).toLocaleString()}
+                  {formatAdminDateTime(log.createdAt)}
                 </td>
-                <td className="max-w-sm px-4 py-3 text-white">
-                  <p className="leading-snug">
-                    {log.summary ||
-                      `${activityActorLabel(log.userType)} · ${activityActionLabel(log.action)}`}
-                  </p>
-                  {log.details != null && (
-                    <p className="mt-1 truncate text-xs text-[var(--muted)]" title={formatDetails(log.details)}>
-                      {formatDetails(log.details)}
-                    </p>
-                  )}
+                <td className="max-w-md px-4 py-3 text-white">
+                  <p className="leading-snug">{formatActivitySummary(log)}</p>
                 </td>
-                <td className="px-4 py-3 text-white">
-                  {log.actorLabel || activityActorLabel(log.userType)}
-                </td>
+                <td className="px-4 py-3 text-white">{shortActor(log)}</td>
                 <td className="px-4 py-3 font-medium text-white">
                   {activityActionLabel(log.action)}
                 </td>
                 <td className="px-4 py-3 text-white">
-                  <p>{log.entityLabel || entityTypeLabel(log.entityType)}</p>
+                  <p>
+                    {log.entityLabel
+                      ? log.entityLabel.split("<")[0]?.split("·")[0]?.trim() ||
+                        log.entityLabel
+                      : entityTypeLabel(log.entityType)}
+                  </p>
                   {log.entityLabel && (
                     <span className="block text-xs text-[var(--muted)]">
                       {entityTypeLabel(log.entityType)}

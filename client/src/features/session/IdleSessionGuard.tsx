@@ -12,6 +12,10 @@ type Props = {
   channelName: string;
   /** Clears client auth + calls server logout. */
   onLogout: () => void;
+  /** Override total idle window (ms). Defaults to shared SESSION_IDLE_MS. */
+  idleMs?: number;
+  /** Override warning window (ms). Defaults to shared SESSION_WARNING_MS. */
+  warningMs?: number;
   children: ReactNode;
 };
 
@@ -23,6 +27,8 @@ export function IdleSessionGuard({
   loginPath,
   channelName,
   onLogout,
+  idleMs,
+  warningMs,
   children,
 }: Props) {
   const navigate = useNavigate();
@@ -38,6 +44,8 @@ export function IdleSessionGuard({
     useIdleSessionTimeout({
       enabled,
       channelName,
+      idleMs,
+      warningMs,
       onTimeout: expireSession,
     });
 

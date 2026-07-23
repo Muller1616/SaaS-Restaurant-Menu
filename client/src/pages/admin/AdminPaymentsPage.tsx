@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AdminPagination } from "../../components/AdminPagination";
 import { AuthenticatedImage } from "../../components/AuthenticatedImage";
 import { api, type ApiSuccess } from "../../lib/api";
+import { formatAdminDateTime } from "../../lib/datetime";
 import { formatEtb } from "../../lib/plans";
 import {
   filterOptionLabel,
@@ -19,9 +20,12 @@ type PaymentRow = {
   screenshotUrl: string;
   durationMonths: number;
   status: string;
+  adminNotes: string | null;
   rejectionReason: string | null;
   createdAt: string;
+  updatedAt: string;
   branchName: string | null;
+  approvedByName: string | null;
   tenant: {
     businessName: string;
     email: string;
@@ -38,6 +42,36 @@ type PageResult<T> = {
 };
 
 const tabs = ["PENDING", "APPROVED", "REJECTED", "ALL"] as const;
+
+function statusTone(status: string) {
+  switch (status) {
+    case "APPROVED":
+      return "border-[rgba(61,186,138,0.35)] bg-[rgba(61,186,138,0.12)] text-[var(--success)]";
+    case "REJECTED":
+      return "border-[rgba(255,107,107,0.35)] bg-[rgba(255,107,107,0.12)] text-[var(--danger)]";
+    case "PENDING":
+      return "border-[rgba(212,165,116,0.4)] bg-[rgba(212,165,116,0.12)] text-[var(--gold-soft)]";
+    default:
+      return "border-white/15 bg-white/5 text-white";
+  }
+}
+
+function DetailRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null | undefined;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-[var(--line)] py-2.5 last:border-0">
+      <dt className="shrink-0 text-[var(--muted)]">{label}</dt>
+      <dd className="text-right font-medium text-white break-all">
+        {value?.trim() ? value : "—"}
+      </dd>
+    </div>
+  );
+}
 
 async function fetchPayments(status: string, page: number) {
   const { data } = await api.get<ApiSuccess<PageResult<PaymentRow>>>(
@@ -221,8 +255,15 @@ export function AdminPaymentsPage() {
                         {paymentMethodLabel(payment.paymentMethod)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-white">
-                      {paymentStatusLabel(payment.status)}
+                    <td className="px-4 py-3">
+                      <span
+                        className={[
+                          "inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold",
+                          statusTone(payment.status),
+                        ].join(" ")}
+                      >
+                        {paymentStatusLabel(payment.status)}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -244,34 +285,112 @@ export function AdminPaymentsPage() {
           )}
         </div>
 
-        <aside className="rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)] p-5">
+        <aside className="h-fit rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)] p-5 xl:sticky xl:top-6">
           {!selected && (
-            <p className="text-[var(--muted)]">Select a payment to review.</p>
+            <div className="py-8 text-center">
+              <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
+                Payment detail
+              </p>
+              <p className="mt-3 text-sm text-[var(--muted)]">
+                Select a payment from the list to review proof, metadata, and
+                take action.
+              </p>
+            </div>
           )}
           {selected && (
-            <div className="space-y-3 text-sm">
-              <h2 className="font-[family-name:var(--font-display)] text-2xl text-white">
-                {selected.tenant.businessName}
-              </h2>
-              <p className="text-white">{selected.branchName}</p>
-              <p className="text-white">
-                {formatEtb(selected.amount)} · {selected.durationMonths} months
-              </p>
-              <p className="text-[var(--muted)]">
-                {paymentMethodLabel(selected.paymentMethod)} ·{" "}
-                {selected.referenceNumber}
-              </p>
-              <div className="overflow-hidden rounded-xl border border-[var(--line)]">
-                <AuthenticatedImage
-                  apiPath={`/admin/payments/${selected.id}/proof`}
-                  alt="Payment proof"
-                  className="max-h-64 w-full bg-black/25 object-contain"
+            <div className="space-y-5 text-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
+                    Payment review
+                  </p>
+                  <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-white">
+                    {selected.tenant.businessName}
+                  </h2>
+                  <p className="mt-1 text-[var(--muted)]">
+                    Submitted {formatAdminDateTime(selected.createdAt)}
+                  </p>
+                </div>
+                <span
+                  className={[
+                    "rounded-full border px-3 py-1 text-xs font-semibold",
+                    statusTone(selected.status),
+                  ].join(" ")}
+                >
+                  {paymentStatusLabel(selected.status)}
+                </span>
+              </div>
+
+              <div className="rounded-2xl border border-[var(--line)] bg-black/20 px-4 py-3">
+                <p className="text-[11px] tracking-wide text-[var(--muted)] uppercase">
+                  Amount
+                </p>
+                <p className="mt-1 font-[family-name:var(--font-display)] text-3xl text-white">
+                  {formatEtb(selected.amount)}
+                </p>
+                <p className="mt-1 text-[var(--gold-soft)]">
+                  Covers {selected.durationMonths} month
+                  {selected.durationMonths === 1 ? "" : "s"} of plan access
+                </p>
+              </div>
+
+              <dl>
+                <DetailRow label="Owner" value={selected.tenant.fullName} />
+                <DetailRow label="Email" value={selected.tenant.email} />
+                <DetailRow label="Branch" value={selected.branchName} />
+                <DetailRow
+                  label="Method"
+                  value={paymentMethodLabel(selected.paymentMethod)}
                 />
+                <DetailRow label="Reference" value={selected.referenceNumber} />
+                {selected.approvedByName && (
+                  <DetailRow label="Reviewed by" value={selected.approvedByName} />
+                )}
+                {selected.status !== "PENDING" && (
+                  <DetailRow
+                    label="Updated"
+                    value={formatAdminDateTime(selected.updatedAt)}
+                  />
+                )}
+              </dl>
+
+              {selected.rejectionReason && (
+                <div className="rounded-2xl border border-[rgba(255,107,107,0.35)] bg-[rgba(255,107,107,0.1)] px-4 py-3">
+                  <p className="text-[11px] tracking-wide text-[var(--danger)] uppercase">
+                    Decline reason
+                  </p>
+                  <p className="mt-1 text-white">{selected.rejectionReason}</p>
+                </div>
+              )}
+
+              {selected.adminNotes && (
+                <div className="rounded-2xl border border-[var(--line)] bg-black/20 px-4 py-3">
+                  <p className="text-[11px] tracking-wide text-[var(--muted)] uppercase">
+                    Admin notes
+                  </p>
+                  <p className="mt-1 text-white">{selected.adminNotes}</p>
+                </div>
+              )}
+
+              <div>
+                <p className="mb-2 text-[11px] tracking-wide text-[var(--muted)] uppercase">
+                  Payment proof
+                </p>
+                <div className="overflow-hidden rounded-xl border border-[var(--line)]">
+                  <AuthenticatedImage
+                    apiPath={`/admin/payments/${selected.id}/proof`}
+                    alt="Payment proof"
+                    className="max-h-64 w-full bg-black/25 object-contain"
+                  />
+                </div>
               </div>
 
               {selected.status === "PENDING" && (
-                <div className="space-y-2 pt-2">
-                  <label className="block text-sm">
+                <div className="space-y-3 border-t border-[var(--line)] pt-4">
+                  <p className="text-[11px] tracking-[0.22em] text-[var(--muted)] uppercase">
+                    Review actions
+                  </p>
+                  <label className="block">
                     <span className="mb-1.5 block text-[var(--muted)]">
                       Override start date (optional)
                     </span>
@@ -292,23 +411,41 @@ export function AdminPaymentsPage() {
                     placeholder="Rejection reason (optional)"
                     className="min-h-20 w-full rounded-xl border border-[var(--line)] bg-black/25 px-3 py-2 text-white outline-none focus:border-[var(--gold)]"
                   />
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
+                      disabled={approve.isPending || reject.isPending}
                       onClick={() => approve.mutate(selected.id)}
-                      className="rounded-full bg-[var(--gold)] px-4 py-2 text-sm font-bold text-[var(--night)]"
+                      className="rounded-full bg-[var(--gold)] px-4 py-2 text-sm font-bold text-[var(--night)] disabled:opacity-50"
                     >
-                      Confirm
+                      Confirm payment
                     </button>
                     <button
                       type="button"
+                      disabled={approve.isPending || reject.isPending}
                       onClick={() => reject.mutate(selected.id)}
-                      className="rounded-full border border-white/15 px-4 py-2 text-sm text-[var(--danger)] hover:border-[var(--danger)]"
+                      className="rounded-full border border-white/15 px-4 py-2 text-sm text-[var(--danger)] hover:border-[var(--danger)] disabled:opacity-50"
                     >
                       Decline
                     </button>
                   </div>
                 </div>
+              )}
+
+              {selected.status === "APPROVED" && (
+                <p className="rounded-2xl border border-[rgba(61,186,138,0.3)] bg-[rgba(61,186,138,0.1)] px-4 py-3 text-[var(--success)]">
+                  This payment was confirmed
+                  {selected.approvedByName
+                    ? ` by ${selected.approvedByName}`
+                    : ""}
+                  . The restaurant plan was extended accordingly.
+                </p>
+              )}
+
+              {selected.status === "REJECTED" && (
+                <p className="rounded-2xl border border-[rgba(255,107,107,0.3)] bg-[rgba(255,107,107,0.1)] px-4 py-3 text-[var(--danger)]">
+                  This payment was declined. No plan changes were applied.
+                </p>
               )}
             </div>
           )}

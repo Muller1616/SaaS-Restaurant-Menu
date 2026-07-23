@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AdminPagination } from "../../components/AdminPagination";
 import { api, type ApiSuccess } from "../../lib/api";
+import { formatAdminDate, formatAdminDateTime } from "../../lib/datetime";
 import { formatEtb } from "../../lib/plans";
 import {
   activityActorLabel,
@@ -10,6 +11,8 @@ import {
   subscriptionEventLabel,
   subscriptionStatusLabel,
 } from "../../lib/status-labels";
+
+const SUBSCRIPTION_PAGE_SIZE = 5;
 
 type SubRow = {
   id: string;
@@ -61,10 +64,27 @@ const filters = [
   "CANCELLED",
 ] as const;
 
+function statusTone(status: string) {
+  switch (status) {
+    case "ACTIVE":
+    case "TRIAL":
+      return "border-[rgba(61,186,138,0.35)] bg-[rgba(61,186,138,0.12)] text-[var(--success)]";
+    case "NEARLY_EXPIRED":
+    case "GRACE_PERIOD":
+      return "border-[rgba(212,165,116,0.4)] bg-[rgba(212,165,116,0.12)] text-[var(--gold-soft)]";
+    case "EXPIRED":
+    case "SUSPENDED":
+    case "CANCELLED":
+      return "border-[rgba(255,107,107,0.35)] bg-[rgba(255,107,107,0.12)] text-[var(--danger)]";
+    default:
+      return "border-white/15 bg-white/5 text-white";
+  }
+}
+
 async function fetchSubs(status: string, page: number) {
   const { data } = await api.get<ApiSuccess<PageResult<SubRow>>>(
     "/admin/subscriptions",
-    { params: { status, page, pageSize: 20 } },
+    { params: { status, page, pageSize: SUBSCRIPTION_PAGE_SIZE } },
   );
   return data.data;
 }
@@ -87,6 +107,13 @@ export function AdminSubscriptionsPage() {
     queryKey: ["admin", "subscriptions", filter, page],
     queryFn: () => fetchSubs(filter, page),
   });
+
+  useEffect(() => {
+    if (!query.data) return;
+    if (page > query.data.totalPages) {
+      setPage(Math.max(1, query.data.totalPages));
+    }
+  }, [query.data, page]);
 
   const history = useQuery({
     queryKey: ["admin", "subscription-history", historyId],
@@ -136,10 +163,12 @@ export function AdminSubscriptionsPage() {
       ),
   });
 
+  const busy = extend.isPending || setStatus.isPending;
+
   return (
     <div className="space-y-6">
       <div>
-          <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
+        <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
           Billing lifecycle
         </p>
         <h1 className="font-[family-name:var(--font-display)] text-3xl text-white">
@@ -179,110 +208,141 @@ export function AdminSubscriptionsPage() {
 
       <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="space-y-3">
-          <div className="overflow-hidden rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)]">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-[var(--panel-2)] text-[var(--muted)]">
-                <tr>
-                  <th className="px-4 py-3">Tenant</th>
-                  <th className="px-4 py-3">Branch</th>
-                  <th className="px-4 py-3">Plan</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Expiry</th>
-                  <th className="px-4 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {query.data?.items.map((row) => (
-                  <tr
-                    key={row.id}
-                    className={[
-                      "border-t border-[var(--line)] hover:bg-white/4",
-                      historyId === row.id
-                        ? "bg-[rgba(212,165,116,0.12)]"
-                        : "",
-                    ].join(" ")}
+          {query.isLoading && (
+            <p className="rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)] px-4 py-10 text-center text-[var(--muted)]">
+              Loading subscriptions…
+            </p>
+          )}
+
+          {query.data?.items.map((row) => (
+            <article
+              key={row.id}
+              className={[
+                "rounded-[1.75rem] border bg-[var(--panel)] p-5 transition",
+                historyId === row.id
+                  ? "border-[var(--gold)]/50 bg-[rgba(212,165,116,0.08)]"
+                  : "border-[var(--line)]",
+              ].join(" ")}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] tracking-[0.22em] text-[var(--muted)] uppercase">
+                    Restaurant
+                  </p>
+                  <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-white">
+                    {row.tenant.businessName}
+                  </h2>
+                  <p className="mt-0.5 truncate text-sm text-[var(--muted)]">
+                    {row.tenant.fullName} · {row.tenant.email}
+                  </p>
+                </div>
+                <span
+                  className={[
+                    "rounded-full border px-3 py-1 text-xs font-semibold",
+                    statusTone(row.status),
+                  ].join(" ")}
+                >
+                  {subscriptionStatusLabel(row.status)}
+                </span>
+              </div>
+
+              <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-2xl border border-[var(--line)] bg-black/20 px-3 py-3">
+                  <dt className="text-[11px] tracking-wide text-[var(--muted)] uppercase">
+                    Branch
+                  </dt>
+                  <dd className="mt-1 font-medium text-white">{row.branch.name}</dd>
+                </div>
+                <div className="rounded-2xl border border-[var(--line)] bg-black/20 px-3 py-3">
+                  <dt className="text-[11px] tracking-wide text-[var(--muted)] uppercase">
+                    Plan
+                  </dt>
+                  <dd className="mt-1 font-medium text-white">{row.plan.name}</dd>
+                  <dd className="text-xs text-[var(--gold-soft)]">
+                    {formatEtb(row.plan.priceMonthly)}/mo
+                  </dd>
+                </div>
+                <div className="rounded-2xl border border-[var(--line)] bg-black/20 px-3 py-3">
+                  <dt className="text-[11px] tracking-wide text-[var(--muted)] uppercase">
+                    Expires
+                  </dt>
+                  <dd className="mt-1 font-medium text-white">
+                    {formatAdminDate(row.expiryDate)}
+                  </dd>
+                </div>
+                <div className="rounded-2xl border border-[var(--line)] bg-black/20 px-3 py-3">
+                  <dt className="text-[11px] tracking-wide text-[var(--muted)] uppercase">
+                    Remaining
+                  </dt>
+                  <dd className="mt-1 font-medium text-white">
+                    {row.daysRemaining == null
+                      ? "—"
+                      : `${row.daysRemaining} day${row.daysRemaining === 1 ? "" : "s"}`}
+                  </dd>
+                </div>
+              </dl>
+
+              <div className="mt-5 border-t border-[var(--line)] pt-4">
+                <p className="mb-2 text-[11px] tracking-[0.22em] text-[var(--muted)] uppercase">
+                  Actions
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setHistoryId(row.id)}
+                    className="rounded-full border border-[var(--gold)]/40 px-3.5 py-1.5 text-xs font-semibold text-[var(--gold-soft)] hover:border-[var(--gold)] disabled:opacity-40"
                   >
-                    <td className="px-4 py-3">
-                      <p className="font-semibold text-white">
-                        {row.tenant.businessName}
-                      </p>
-                      <p className="text-[var(--muted)]">{row.tenant.email}</p>
-                    </td>
-                    <td className="px-4 py-3 text-white">{row.branch.name}</td>
-                    <td className="px-4 py-3 text-white">
-                      {row.plan.name}
-                      <span className="block text-xs text-[var(--muted)]">
-                        {formatEtb(row.plan.priceMonthly)}/mo
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-white">
-                      {subscriptionStatusLabel(row.status)}
-                    </td>
-                    <td className="px-4 py-3 text-white">
-                      {row.expiryDate
-                        ? new Date(row.expiryDate).toLocaleDateString()
-                        : "—"}
-                      {row.daysRemaining != null && (
-                        <span className="block text-xs text-[var(--muted)]">
-                          {row.daysRemaining}d
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setHistoryId(row.id)}
-                          className="rounded-full border border-white/15 px-2 py-1 text-xs text-[var(--gold-soft)] hover:border-[var(--gold)]"
-                        >
-                          History
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => extend.mutate({ id: row.id, months: 1 })}
-                          className="rounded-full border border-white/15 px-2 py-1 text-xs text-white hover:border-[var(--gold)]"
-                        >
-                          +1 mo
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setStatus.mutate({ id: row.id, status: "SUSPENDED" })
-                          }
-                          className="rounded-full border border-white/15 px-2 py-1 text-xs text-[var(--danger)] hover:border-[var(--danger)]"
-                        >
-                          Suspend
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setStatus.mutate({ id: row.id, status: "ACTIVE" })
-                          }
-                          className="rounded-full border border-white/15 px-2 py-1 text-xs text-white hover:border-[var(--gold)]"
-                        >
-                          Activate
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setStatus.mutate({ id: row.id, status: "CANCELLED" })
-                          }
-                          className="rounded-full border border-white/15 px-2 py-1 text-xs text-white hover:border-[var(--gold)]"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {query.data?.items.length === 0 && (
-              <p className="px-4 py-10 text-center text-[var(--muted)]">
-                No subscriptions match this filter.
-              </p>
-            )}
-          </div>
+                    History
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => extend.mutate({ id: row.id, months: 1 })}
+                    className="rounded-full border border-white/15 px-3.5 py-1.5 text-xs font-semibold text-white hover:border-[var(--gold)] disabled:opacity-40"
+                  >
+                    Extend +1 mo
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || row.status === "SUSPENDED"}
+                    onClick={() =>
+                      setStatus.mutate({ id: row.id, status: "SUSPENDED" })
+                    }
+                    className="rounded-full border border-white/15 px-3.5 py-1.5 text-xs font-semibold text-[var(--danger)] hover:border-[var(--danger)] disabled:opacity-40"
+                  >
+                    Suspend
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || row.status === "ACTIVE"}
+                    onClick={() =>
+                      setStatus.mutate({ id: row.id, status: "ACTIVE" })
+                    }
+                    className="rounded-full border border-white/15 px-3.5 py-1.5 text-xs font-semibold text-white hover:border-[var(--gold)] disabled:opacity-40"
+                  >
+                    Activate
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || row.status === "CANCELLED"}
+                    onClick={() =>
+                      setStatus.mutate({ id: row.id, status: "CANCELLED" })
+                    }
+                    className="rounded-full border border-white/15 px-3.5 py-1.5 text-xs font-semibold text-white hover:border-[var(--gold)] disabled:opacity-40"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+
+          {query.data?.items.length === 0 && (
+            <p className="rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)] px-4 py-10 text-center text-[var(--muted)]">
+              No subscriptions match this filter.
+            </p>
+          )}
 
           {query.data && (
             <AdminPagination
@@ -294,11 +354,11 @@ export function AdminSubscriptionsPage() {
           )}
         </div>
 
-        <aside className="rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)] p-5">
+        <aside className="h-fit rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)] p-5 xl:sticky xl:top-6">
           {!historyId && (
             <p className="text-sm text-[var(--muted)]">
-              Choose <span className="text-white">History</span> on a row to see
-              that branch’s subscription timeline.
+              Choose <span className="text-white">History</span> on a
+              subscription to review that branch’s billing timeline.
             </p>
           )}
           {historyId && history.isLoading && (
@@ -331,7 +391,7 @@ export function AdminSubscriptionsPage() {
                         {subscriptionEventLabel(event.kind)}
                       </span>
                       <span className="text-xs text-[var(--muted)]">
-                        {new Date(event.createdAt).toLocaleString()}
+                        {formatAdminDateTime(event.createdAt)}
                       </span>
                     </div>
                     <p className="mt-1 text-white">{event.summary}</p>
