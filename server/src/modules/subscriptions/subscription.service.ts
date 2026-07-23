@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { env } from "../../config/env.js";
 import { logActivity } from "../../lib/activity-log.js";
+import {
+  invalidateAdminDashboardCache,
+  invalidateCachesForBranch,
+} from "../../lib/cache/index.js";
 import { logger } from "../../lib/logger.js";
 import { parsePageParams, toPageResult } from "../../lib/pagination.js";
 import { prisma } from "../../lib/prisma.js";
@@ -515,6 +519,9 @@ KitchenOS Team`,
     },
   });
 
+  if (payment.branchId) await invalidateCachesForBranch(payment.branchId);
+  else await invalidateAdminDashboardCache();
+
   return {
     payment: serializePayment(result.updatedPayment),
     subscription: {
@@ -579,6 +586,7 @@ KitchenOS Team`,
     details: { reason: updated.rejectionReason },
   });
 
+  await invalidateAdminDashboardCache();
   return serializePayment(updated);
 }
 
@@ -724,6 +732,7 @@ export async function adminExtendSubscription(input: {
     meta: { months: input.months, expiryDate: expiryDate.toISOString() },
   });
 
+  await invalidateCachesForBranch(subscription.branchId);
   return updated;
 }
 
@@ -776,6 +785,7 @@ export async function adminSetSubscriptionStatus(input: {
     actorId: input.adminId,
   });
 
+  await invalidateCachesForBranch(updated.branchId);
   return updated;
 }
 
