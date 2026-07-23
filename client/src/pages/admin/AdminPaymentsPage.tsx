@@ -78,9 +78,9 @@ export function AdminPaymentsPage() {
       setNotice("Payment confirmed and plan extended.");
       setSelectedId(null);
       setOverrideStartDate("");
-      await queryClient.invalidateQueries({ queryKey: ["admin", "payments"] });
-      await queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
-      await queryClient.invalidateQueries({ queryKey: ["admin", "subscriptions"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "payments"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "subscriptions"] });
     },
     onError: (err) =>
       setError(
@@ -100,8 +100,8 @@ export function AdminPaymentsPage() {
       setNotice("Payment declined.");
       setReason("");
       setSelectedId(null);
-      await queryClient.invalidateQueries({ queryKey: ["admin", "payments"] });
-      await queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "payments"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
     },
     onError: (err) =>
       setError(

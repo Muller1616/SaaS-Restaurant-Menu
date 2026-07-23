@@ -2,10 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { FoodDescription } from "../components/FoodDescription";
+import { MediaImage } from "../components/MediaImage";
 import { CallToOrderSheet } from "../features/public-menu/CallToOrderSheet";
 import { ShareMenuSheet } from "../features/public-menu/ShareMenuSheet";
 import { api, type ApiSuccess } from "../lib/api";
-import { assetUrl } from "../lib/api-base";
 import { formatEtb } from "../lib/plans";
 
 type PublicMenu =
@@ -149,8 +149,8 @@ export function PublicMenuPage() {
         {menu.data?.unavailable && (
           <section className="rounded-[2rem] border border-[var(--line)] bg-[var(--panel)] p-8 text-center">
             {menu.data.logoUrl && (
-              <img
-                src={assetUrl(menu.data.logoUrl)}
+              <MediaImage
+                src={menu.data.logoUrl}
                 alt=""
                 className="mx-auto mb-4 h-20 w-20 rounded-2xl object-cover"
               />
@@ -185,8 +185,8 @@ export function PublicMenuPage() {
           <>
             <header className="mb-6 text-center">
               {available.logoUrl && (
-                <img
-                  src={assetUrl(available.logoUrl)}
+                <MediaImage
+                  src={available.logoUrl}
                   alt={`${available.businessName} logo`}
                   className="mx-auto mb-4 h-24 w-24 rounded-[1.25rem] border border-[var(--line)] object-cover"
                 />
@@ -261,11 +261,10 @@ export function PublicMenuPage() {
                   className="overflow-hidden rounded-[1.5rem] border border-[var(--line)] bg-[var(--panel)]"
                 >
                   {item.imageUrl && (
-                    <img
-                      src={assetUrl(item.imageUrl)}
+                    <MediaImage
+                      src={item.imageUrl}
                       alt={item.name}
                       className="aspect-[16/9] w-full object-cover"
-                      loading="lazy"
                     />
                   )}
                   <div className="flex items-start justify-between gap-3 p-4">
