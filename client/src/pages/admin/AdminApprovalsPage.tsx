@@ -36,6 +36,7 @@ type ApproveResult = {
   email: string;
   businessName: string;
   temporaryPassword: string;
+  activationUrl: string;
   loginUrl: string;
   emailDelivered?: boolean;
   branch: {
@@ -533,8 +534,8 @@ export function AdminApprovalsPage() {
             </h3>
             <p className="mt-2 text-sm text-[var(--muted)]">
               {approvedCreds.emailDelivered === false
-                ? "Email could not be delivered (SMTP unavailable). Copy these credentials and share them with the owner now — the temporary password is only shown once."
-                : "Credentials were emailed to the owner. Copy them now — the temporary password is only shown once here."}
+                ? "Email could not be delivered (SMTP unavailable). Copy the activation link and temporary password and share them with the owner now — they are only shown once."
+                : "An activation email was sent to the owner. Copy the link and temporary password now — they are only shown once here."}
             </p>
             <div className="mt-5 space-y-2 rounded-2xl border border-[var(--line)] bg-black/25 p-4 text-sm text-white">
               <p>
@@ -545,6 +546,15 @@ export function AdminApprovalsPage() {
                 <span className="font-mono text-[var(--gold-soft)]">
                   {approvedCreds.temporaryPassword}
                 </span>
+              </p>
+              <p className="break-all">
+                <span className="text-[var(--muted)]">Activation link:</span>{" "}
+                <a
+                  href={approvedCreds.activationUrl}
+                  className="text-[var(--gold-soft)] underline"
+                >
+                  {approvedCreds.activationUrl}
+                </a>
               </p>
               <p>
                 <span className="text-[var(--muted)]">Branch:</span>{" "}
@@ -557,10 +567,16 @@ export function AdminApprovalsPage() {
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
               <a
-                href={approvedCreds.loginUrl}
+                href={approvedCreds.activationUrl}
                 className="rounded-full bg-[var(--gold)] px-5 py-2.5 text-sm font-bold text-[var(--night)]"
               >
-                Open restaurant login
+                Open activation link
+              </a>
+              <a
+                href={approvedCreds.loginUrl}
+                className="rounded-full border border-white/15 px-5 py-2.5 text-sm hover:border-[var(--gold)]"
+              >
+                Restaurant login
               </a>
               <button
                 type="button"
