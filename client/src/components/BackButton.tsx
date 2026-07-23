@@ -89,10 +89,27 @@ export function BackButton({
 
 /** Previous entries that should not be restored from tenant auth screens. */
 export function isProtectedTenantHistoryKey(previousKey: string) {
-  if (!previousKey.startsWith("/tenant")) return false;
-  return !(
+  if (
     previousKey.startsWith("/tenant/login") ||
     previousKey.startsWith("/tenant/forgot-password") ||
-    previousKey.startsWith("/tenant/reset-password")
-  );
+    previousKey.startsWith("/tenant/reset-password") ||
+    previousKey.startsWith("/tenant/activate")
+  ) {
+    return false;
+  }
+  if (previousKey.startsWith("/tenant")) return true;
+
+  // Slug-based portal: /{slug} or /{slug}/menu …
+  const parts = previousKey.split("/").filter(Boolean);
+  if (parts.length === 0) return false;
+  const reserved = new Set([
+    "admin",
+    "r",
+    "menu",
+    "register",
+    "tenant",
+    "login",
+  ]);
+  if (reserved.has(parts[0])) return false;
+  return true;
 }

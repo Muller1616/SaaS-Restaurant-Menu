@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, type ApiSuccess } from "../../lib/api";
 import { useTenantAuth } from "./TenantAuthContext";
+import { tenantPortalPath } from "../../lib/tenant-paths";
 
 type BannerSubscription = {
   status: string;
@@ -30,7 +31,8 @@ function daysPhrase(days: number | null) {
 }
 
 export function TenantSubscriptionBanner() {
-  const { currentBranchId } = useTenantAuth();
+  const { currentBranchId , tenant} = useTenantAuth();
+  const portal = (...segments: string[]) => tenantPortalPath(tenant?.slug ?? "", ...segments);
 
   const query = useQuery({
     queryKey: ["tenant", "subscription", currentBranchId],
@@ -45,7 +47,7 @@ export function TenantSubscriptionBanner() {
   const status = sub.status;
   const renewCta = !sub.isFree && (
     <Link
-      to="/tenant/subscription"
+      to={portal("subscription")}
       className="font-semibold underline underline-offset-2"
     >
       Renew now

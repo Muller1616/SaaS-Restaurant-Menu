@@ -1,22 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Outlet, useNavigate } from "react-router-dom";
 import { api, type ApiSuccess } from "../../lib/api";
+import { tenantPortalPath } from "../../lib/tenant-paths";
 import { AppNavLink } from "../navigation/AppNavLink";
 import { PageTransition } from "../navigation/PageTransition";
 import { TenantSubscriptionBanner } from "./TenantSubscriptionBanner";
 import { useTenantAuth } from "./TenantAuthContext";
-
-const baseNavItems = [
-  { to: "/tenant", label: "Dashboard", end: true },
-  { to: "/tenant/branches", label: "Branches" },
-  { to: "/tenant/menu", label: "Menu" },
-  { to: "/tenant/qr", label: "QR Code" },
-  { to: "/tenant/analytics", label: "Analytics" },
-  { to: "/tenant/subscription", label: "Subscription" },
-  { to: "/tenant/payments", label: "Payments" },
-  { to: "/tenant/notifications", label: "Inbox", badge: true },
-  { to: "/tenant/settings", label: "Settings" },
-] as const;
 
 async function fetchUnreadCount() {
   const { data } = await api.get<ApiSuccess<{ unread: number }>>(
@@ -32,10 +21,26 @@ export function TenantLayout() {
   const singleBranch = branches.length <= 1;
   const currentBranch =
     branches.find((branch) => branch.id === currentBranchId) ?? branches[0];
+  const slug = tenant?.slug ?? "";
 
   const maxBranches = tenant?.selectedPlan.maxBranches ?? 1;
   const canAddBranch = maxBranches < 0 || branches.length < maxBranches;
-  const navItems = baseNavItems;
+
+  const navItems = [
+    { to: tenantPortalPath(slug), label: "Dashboard", end: true as const },
+    { to: tenantPortalPath(slug, "branches"), label: "Branches" },
+    { to: tenantPortalPath(slug, "menu"), label: "Menu" },
+    { to: tenantPortalPath(slug, "qr"), label: "QR Code" },
+    { to: tenantPortalPath(slug, "analytics"), label: "Analytics" },
+    { to: tenantPortalPath(slug, "subscription"), label: "Subscription" },
+    { to: tenantPortalPath(slug, "payments"), label: "Payments" },
+    {
+      to: tenantPortalPath(slug, "notifications"),
+      label: "Inbox",
+      badge: true as const,
+    },
+    { to: tenantPortalPath(slug, "settings"), label: "Settings" },
+  ];
 
   const unread = useQuery({
     queryKey: ["tenant", "notifications", "unread"],
@@ -52,7 +57,7 @@ export function TenantLayout() {
 
   function onBranchSelect(value: string) {
     if (value === "__add__") {
-      navigate("/tenant/branches?add=1");
+      navigate(`${tenantPortalPath(slug, "branches")}?add=1`);
       return;
     }
     setBranch(value);
@@ -77,6 +82,9 @@ export function TenantLayout() {
             <h1 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-white sm:text-3xl">
               {tenant?.businessName}
             </h1>
+            {slug ? (
+              <p className="mt-1 text-xs text-[var(--muted)]">/{slug}</p>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
