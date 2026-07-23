@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, type ApiSuccess } from "../../lib/api";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
+import { tenantPortalPath } from "../../lib/tenant-paths";
 
 type Notification = {
   id: string;
@@ -22,6 +23,7 @@ async function fetchNotifications() {
 export function TenantNotificationsPage() {
   const queryClient = useQueryClient();
   const { tenant } = useTenantAuth();
+  const portal = (...segments: string[]) => tenantPortalPath(tenant?.slug ?? "", ...segments);
 
   const query = useQuery({
     queryKey: ["tenant", "notifications"],
@@ -77,7 +79,7 @@ export function TenantNotificationsPage() {
             Mark all as read
           </button>
           <Link
-            to="/tenant/settings"
+            to={portal("settings")}
             className="rounded-full bg-[var(--gold)] px-4 py-2 text-sm font-bold text-[var(--night)]"
           >
             Email settings

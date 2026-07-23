@@ -3,6 +3,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
+import { tenantPortalPath } from "../../lib/tenant-paths";
 import { api, type ApiSuccess } from "../../lib/api";
 import { refreshQueries } from "../../lib/refresh-queries";
 import { MediaImage } from "../../components/MediaImage";
@@ -65,6 +66,7 @@ async function openPrint() {
 export function TenantQrPage() {
   const queryClient = useQueryClient();
   const { currentBranchId, tenant } = useTenantAuth();
+  const portal = (...segments: string[]) => tenantPortalPath(tenant?.slug ?? "", ...segments);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cacheBust, setCacheBust] = useState(0);
@@ -161,13 +163,14 @@ export function TenantQrPage() {
           </p>
         </div>
         {qr.data && (
-          <Link
-            to={`/r/${qr.data.tenantSlug}/${qr.data.branchSlug}`}
+          <a
+            href={qr.data.menuUrl}
             target="_blank"
+            rel="noreferrer"
             className="rounded-full border border-white/15 px-5 py-2.5 text-sm hover:border-[var(--gold)]"
           >
             Open public menu
-          </Link>
+          </a>
         )}
       </div>
 
@@ -285,7 +288,7 @@ export function TenantQrPage() {
 
               {!qr.data.canCustomize ? (
                 <Link
-                  to="/tenant/subscription"
+                  to={portal("subscription")}
                   className="inline-flex rounded-full bg-[var(--gold)] px-5 py-2.5 text-sm font-bold text-[var(--night)]"
                 >
                   Upgrade to unlock
@@ -349,7 +352,7 @@ export function TenantQrPage() {
                           {" "}
                           —{" "}
                           <Link
-                            to="/tenant/settings"
+                            to={portal("settings")}
                             className="text-[var(--gold-soft)] underline"
                           >
                             upload a logo in Settings

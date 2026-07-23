@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { StatusIndicator } from "../../components/charts/StatusIndicator";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
+import { tenantPortalPath } from "../../lib/tenant-paths";
 import { api, type ApiSuccess } from "../../lib/api";
 import { formatEtb } from "../../lib/plans";
 import {
@@ -37,7 +38,8 @@ async function fetchPayments() {
 }
 
 export function TenantPaymentsPage() {
-  const { currentBranchId } = useTenantAuth();
+  const { currentBranchId , tenant} = useTenantAuth();
+  const portal = (...segments: string[]) => tenantPortalPath(tenant?.slug ?? "", ...segments);
   const query = useQuery({
     queryKey: ["tenant", "payments", currentBranchId],
     queryFn: fetchPayments,
@@ -58,7 +60,7 @@ export function TenantPaymentsPage() {
           </p>
         </div>
         <Link
-          to="/tenant/subscription"
+          to={portal("subscription")}
           className="rounded-full bg-[var(--gold)] px-5 py-2.5 text-sm font-bold text-[var(--night)]"
         >
           Renew / pay

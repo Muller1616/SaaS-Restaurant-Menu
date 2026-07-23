@@ -9,6 +9,7 @@ import {
 } from "../../components/BackButton";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { SESSION_IDLE_MESSAGE } from "../../lib/session-timeout-config";
+import { tenantPortalPath } from "../../lib/tenant-paths";
 
 const loginSchema = z.object({
   email: z.email("Enter a valid email"),
@@ -24,9 +25,9 @@ export function TenantLoginPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const idleExpired = searchParams.get("reason") === "idle";
-  const from =
+  const fromState =
     (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ??
-    "/tenant";
+    null;
 
   const {
     register,
@@ -38,10 +39,21 @@ export function TenantLoginPage() {
     defaultValues: { email: "", password: "", rememberMe: true },
   });
 
+  function homeFor(sessionSlug: string | undefined) {
+    if (fromState && fromState !== "/tenant" && !fromState.startsWith("/tenant/login")) {
+      return fromState;
+    }
+    return sessionSlug ? tenantPortalPath(sessionSlug) : "/tenant/login";
+  }
+
   if (isAuthenticated) {
     return (
       <Navigate
-        to={tenant?.mustChangePassword ? "/tenant/change-password" : from}
+        to={
+          tenant?.mustChangePassword
+            ? tenantPortalPath(tenant.slug, "change-password")
+            : homeFor(tenant?.slug)
+        }
         replace
       />
     );
@@ -55,7 +67,9 @@ export function TenantLoginPage() {
         values.rememberMe ?? false,
       );
       navigate(
-        session.mustChangePassword ? "/tenant/change-password" : from,
+        session.mustChangePassword
+          ? tenantPortalPath(session.slug, "change-password")
+          : homeFor(session.slug),
         { replace: true },
       );
     } catch (error) {
