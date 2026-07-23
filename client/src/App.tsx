@@ -115,15 +115,19 @@ function LegacyTenantPortalRedirect() {
 }
 
 /**
- * `/r/:id` — opaque public QR menu when id is a 32-hex publicQrId.
- * Tenant slugs alone are not public menus (prevents slug enumeration).
+ * Single `/r/:tenantSlug` tree:
+ * - 32-hex opaque QR id → customer public menu (never portal)
+ * - tenant slug + portal segment → authenticated workspace
+ *
+ * Important: a separate sibling `/r/:publicId` route used to compete with
+ * this tree's index (`→ dashboard`), so Preview Menu landed on the portal.
  */
-function PublicOrUnknown() {
-  const { publicId } = useParams();
-  if (publicId && looksLikePublicQrId(publicId)) {
+function PublicOrTenantPortal() {
+  const { tenantSlug } = useParams();
+  if (tenantSlug && looksLikePublicQrId(tenantSlug)) {
     return <PublicMenuPage />;
   }
-  return <Navigate to="/" replace />;
+  return <Outlet />;
 }
 
 export default function App() {
@@ -151,9 +155,6 @@ export default function App() {
                     element={<LegacyActivateRedirect />}
                   />
                   <Route path="/admin/login" element={<AdminLoginPage />} />
-
-                  {/* Customer QR menu — opaque id only */}
-                  <Route path="/r/:publicId" element={<PublicOrUnknown />} />
                 </Route>
 
                 <Route path="/tenant" element={<LegacyTenantPortalRedirect />} />
@@ -163,9 +164,10 @@ export default function App() {
                 />
 
                 {/*
-                  Tenant portal under /r/{tenant-slug}/…
+                  /r/{publicQrId} → public menu
+                  /r/{tenant-slug}/… → tenant portal
                 */}
-                <Route path="/r/:tenantSlug" element={<Outlet />}>
+                <Route path="/r/:tenantSlug" element={<PublicOrTenantPortal />}>
                   <Route element={<RouteTransitionOutlet />}>
                     <Route
                       path="activate/:activationToken"
