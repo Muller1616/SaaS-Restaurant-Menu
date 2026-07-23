@@ -1,5 +1,10 @@
 import axios from "axios";
 import { getApiBaseUrl } from "./api-base";
+import {
+  isTenantPortalPathname,
+  looksLikeActivationToken,
+  RESERVED_APP_SEGMENTS,
+} from "./tenant-paths";
 
 export const CSRF_HEADER = "X-CSRF-Token";
 
@@ -38,6 +43,28 @@ export async function ensureCsrfToken(): Promise<string> {
 
 const MUTATING = new Set(["post", "put", "patch", "delete"]);
 
+function isTenantFrontendPath(path: string) {
+  if (path.startsWith("/admin")) return false;
+  if (
+    path === "/tenant/login" ||
+    path.startsWith("/tenant/forgot-password") ||
+    path.startsWith("/tenant/reset-password") ||
+    path.startsWith("/tenant/activate")
+  ) {
+    return false;
+  }
+  if (isTenantPortalPathname(path)) return true;
+  const parts = path.split("/").filter(Boolean);
+  if (
+    parts.length === 2 &&
+    !RESERVED_APP_SEGMENTS.has(parts[0]) &&
+    looksLikeActivationToken(parts[1])
+  ) {
+    return false;
+  }
+  return path.startsWith("/tenant");
+}
+
 api.interceptors.request.use(async (config) => {
   const path = window.location.pathname;
   const adminToken = localStorage.getItem("kitchenos_admin_token");
@@ -50,6 +77,7 @@ api.interceptors.request.use(async (config) => {
     url.includes("/admin") ||
     url.includes("/auth/admin");
   const prefersTenant =
+    isTenantFrontendPath(path) ||
     path.startsWith("/tenant") ||
     url.includes("/tenant") ||
     url.includes("/auth/tenant");
@@ -114,12 +142,7 @@ api.interceptors.response.use(
         localStorage.removeItem("kitchenos_admin_user");
         window.location.assign("/admin/login");
       }
-      if (
-        path.startsWith("/tenant") &&
-        path !== "/tenant/login" &&
-        !path.startsWith("/tenant/forgot-password") &&
-        !path.startsWith("/tenant/reset-password")
-      ) {
+      if (isTenantFrontendPath(path)) {
         localStorage.removeItem("kitchenos_tenant_token");
         localStorage.removeItem("kitchenos_tenant_user");
         localStorage.removeItem("kitchenos_current_branch_id");
