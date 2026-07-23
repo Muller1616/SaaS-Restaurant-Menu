@@ -28,6 +28,7 @@ import { AdminTenantsPage } from "./pages/admin/AdminTenantsPage";
 import { HomePage } from "./pages/HomePage";
 import { PublicMenuPage } from "./pages/PublicMenuPage";
 import { RegisterPage } from "./pages/RegisterPage";
+import { TenantActivatePage } from "./pages/tenant/TenantActivatePage";
 import { TenantAnalyticsPage } from "./pages/tenant/TenantAnalyticsPage";
 import { TenantBranchesPage } from "./pages/tenant/TenantBranchesPage";
 import { TenantChangePasswordPage } from "./pages/tenant/TenantChangePasswordPage";
@@ -84,6 +85,10 @@ export default function App() {
                     element={<MenuPathAlias />}
                   />
                   <Route path="/tenant/login" element={<TenantLoginPage />} />
+                  <Route
+                    path="/tenant/activate/:slug/:token"
+                    element={<TenantActivatePage />}
+                  />
                   <Route
                     path="/tenant/forgot-password"
                     element={<TenantForgotPasswordPage />}
