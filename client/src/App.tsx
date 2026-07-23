@@ -48,8 +48,7 @@ import { TenantResetPasswordPage } from "./pages/tenant/TenantResetPasswordPage"
 import { TenantSettingsPage } from "./pages/tenant/TenantSettingsPage";
 import { TenantSubscriptionPage } from "./pages/tenant/TenantSubscriptionPage";
 import {
-  looksLikeActivationToken,
-  TENANT_PORTAL_SEGMENTS,
+  looksLikePublicQrId,
   tenantPortalPath,
 } from "./lib/tenant-paths";
 
@@ -62,24 +61,36 @@ const queryClient = new QueryClient({
   },
 });
 
-/** FR-5.1 `/menu/...` redirects to canonical FR-10.1 `/r/...`. */
-function MenuPathAlias() {
-  const { tenantSlug, branchSlug } = useParams();
-  if (!tenantSlug) return <Navigate to="/" replace />;
-  const to = branchSlug
-    ? `/r/${tenantSlug}/${branchSlug}`
-    : `/r/${tenantSlug}`;
-  return <Navigate to={to} replace />;
-}
-
-/** Old `/tenant/activate/:slug/:token` → `/:slug/:token`. */
+/** Old `/tenant/activate/:slug/:token` → `/r/:slug/activate/:token`. */
 function LegacyActivateRedirect() {
   const { slug, token } = useParams();
   if (!slug || !token) return <Navigate to="/tenant/login" replace />;
-  return <Navigate to={`/${slug}/${token}`} replace />;
+  return <Navigate to={`/r/${slug}/activate/${token}`} replace />;
 }
 
-/** Old `/tenant/*` portal paths → `/{restaurant-slug}/*`. */
+/** Old `/{slug}/…` portal → `/r/{slug}/…`. */
+function LegacyBareSlugRedirect() {
+  const { tenantSlug, "*": rest } = useParams();
+  const location = useLocation();
+  const reserved = new Set([
+    "admin",
+    "api",
+    "r",
+    "register",
+    "tenant",
+    "menu",
+    "login",
+  ]);
+  if (!tenantSlug || reserved.has(tenantSlug)) {
+    return <Navigate to="/" replace />;
+  }
+  const suffix = rest ? `/${rest}` : "/dashboard";
+  return (
+    <Navigate to={`/r/${tenantSlug}${suffix}${location.search}`} replace />
+  );
+}
+
+/** Old `/tenant/*` → `/r/{slug}/*` when authenticated. */
 function LegacyTenantPortalRedirect() {
   const { isAuthenticated, tenant } = useTenantAuth();
   const location = useLocation();
@@ -91,31 +102,26 @@ function LegacyTenantPortalRedirect() {
   }
 
   const rest = location.pathname.replace(/^\/tenant\/?/, "");
-  const target = rest
-    ? tenantPortalPath(tenant.slug, ...rest.split("/").filter(Boolean))
-    : tenantPortalPath(tenant.slug);
+  const segments = rest.split("/").filter(Boolean);
+  const mapped = segments.map((s) => (s === "branches" ? "branch" : s));
+  const target =
+    mapped.length === 0
+      ? tenantPortalPath(tenant.slug)
+      : tenantPortalPath(tenant.slug, ...mapped);
 
   return <Navigate to={`${target}${location.search}`} replace />;
 }
 
 /**
- * `/{slug}/{token}` activation. Portal static segments (menu, qr, …) rank higher
- * and never reach this route.
+ * `/r/:id` — opaque public QR menu when id is a 32-hex publicQrId.
+ * Tenant slugs alone are not public menus (prevents slug enumeration).
  */
-function TenantActivationGate() {
-  const { tenantSlug, activationToken } = useParams();
-  if (!tenantSlug || !activationToken) {
-    return <Navigate to="/" replace />;
+function PublicOrUnknown() {
+  const { publicId } = useParams();
+  if (publicId && looksLikePublicQrId(publicId)) {
+    return <PublicMenuPage />;
   }
-  if (TENANT_PORTAL_SEGMENTS.has(activationToken)) {
-    return (
-      <Navigate to={tenantPortalPath(tenantSlug, activationToken)} replace />
-    );
-  }
-  if (!looksLikeActivationToken(activationToken)) {
-    return <Navigate to="/" replace />;
-  }
-  return <TenantActivatePage />;
+  return <Navigate to="/" replace />;
 }
 
 export default function App() {
@@ -129,16 +135,6 @@ export default function App() {
                 <Route element={<RouteTransitionOutlet />}>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/register" element={<RegisterPage />} />
-                  <Route path="/r/:tenantSlug" element={<PublicMenuPage />} />
-                  <Route
-                    path="/r/:tenantSlug/:branchSlug"
-                    element={<PublicMenuPage />}
-                  />
-                  <Route path="/menu/:tenantSlug" element={<MenuPathAlias />} />
-                  <Route
-                    path="/menu/:tenantSlug/:branchSlug"
-                    element={<MenuPathAlias />}
-                  />
                   <Route path="/tenant/login" element={<TenantLoginPage />} />
                   <Route
                     path="/tenant/forgot-password"
@@ -153,6 +149,9 @@ export default function App() {
                     element={<LegacyActivateRedirect />}
                   />
                   <Route path="/admin/login" element={<AdminLoginPage />} />
+
+                  {/* Customer QR menu — opaque id only */}
+                  <Route path="/r/:publicId" element={<PublicOrUnknown />} />
                 </Route>
 
                 <Route path="/tenant" element={<LegacyTenantPortalRedirect />} />
@@ -162,15 +161,13 @@ export default function App() {
                 />
 
                 {/*
-                  Slug workspace: /{slug}
-                  Activation:     /{slug}/{secure-token}
-                  Public menu:    /r/{slug}  (declared above)
+                  Tenant portal under /r/{tenant-slug}/…
                 */}
-                <Route path="/:tenantSlug" element={<Outlet />}>
+                <Route path="/r/:tenantSlug" element={<Outlet />}>
                   <Route element={<RouteTransitionOutlet />}>
                     <Route
-                      path=":activationToken"
-                      element={<TenantActivationGate />}
+                      path="activate/:activationToken"
+                      element={<TenantActivatePage />}
                     />
                   </Route>
 
@@ -182,8 +179,19 @@ export default function App() {
                       />
                     </Route>
                     <Route element={<TenantLayout />}>
-                      <Route index element={<TenantDashboardPage />} />
-                      <Route path="branches" element={<TenantBranchesPage />} />
+                      <Route
+                        index
+                        element={<Navigate to="dashboard" replace />}
+                      />
+                      <Route
+                        path="dashboard"
+                        element={<TenantDashboardPage />}
+                      />
+                      <Route path="branch" element={<TenantBranchesPage />} />
+                      <Route
+                        path="branches"
+                        element={<Navigate to="../branch" replace />}
+                      />
                       <Route path="menu" element={<TenantMenuPage />} />
                       <Route path="qr" element={<TenantQrPage />} />
                       <Route
@@ -224,6 +232,16 @@ export default function App() {
                     <Route path="settings" element={<AdminSettingsPage />} />
                   </Route>
                 </Route>
+
+                {/* Legacy bare-slug portal (after reserved routes) */}
+                <Route
+                  path="/:tenantSlug/*"
+                  element={<LegacyBareSlugRedirect />}
+                />
+                <Route
+                  path="/:tenantSlug"
+                  element={<LegacyBareSlugRedirect />}
+                />
 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

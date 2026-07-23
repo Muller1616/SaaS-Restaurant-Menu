@@ -99,17 +99,10 @@ export function isProtectedTenantHistoryKey(previousKey: string) {
   }
   if (previousKey.startsWith("/tenant")) return true;
 
-  // Slug-based portal: /{slug} or /{slug}/menu …
   const parts = previousKey.split("/").filter(Boolean);
-  if (parts.length === 0) return false;
-  const reserved = new Set([
-    "admin",
-    "r",
-    "menu",
-    "register",
-    "tenant",
-    "login",
-  ]);
-  if (reserved.has(parts[0])) return false;
-  return true;
+  if (parts[0] === "r" && parts.length >= 3) {
+    if (parts[2] === "activate") return false;
+    return true;
+  }
+  return false;
 }

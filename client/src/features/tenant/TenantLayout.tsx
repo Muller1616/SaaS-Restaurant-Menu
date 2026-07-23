@@ -27,8 +27,8 @@ export function TenantLayout() {
   const canAddBranch = maxBranches < 0 || branches.length < maxBranches;
 
   const navItems = [
-    { to: tenantPortalPath(slug), label: "Dashboard", end: true as const },
-    { to: tenantPortalPath(slug, "branches"), label: "Branches" },
+    { to: tenantPortalPath(slug, "dashboard"), label: "Dashboard", end: true as const },
+    { to: tenantPortalPath(slug, "branch"), label: "Branches" },
     { to: tenantPortalPath(slug, "menu"), label: "Menu" },
     { to: tenantPortalPath(slug, "qr"), label: "QR Code" },
     { to: tenantPortalPath(slug, "analytics"), label: "Analytics" },
@@ -57,7 +57,7 @@ export function TenantLayout() {
 
   function onBranchSelect(value: string) {
     if (value === "__add__") {
-      navigate(`${tenantPortalPath(slug, "branches")}?add=1`);
+      navigate(`${tenantPortalPath(slug, "branch")}?add=1`);
       return;
     }
     setBranch(value);
@@ -83,7 +83,7 @@ export function TenantLayout() {
               {tenant?.businessName}
             </h1>
             {slug ? (
-              <p className="mt-1 text-xs text-[var(--muted)]">/{slug}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">/r/{slug}</p>
             ) : null}
           </div>
 

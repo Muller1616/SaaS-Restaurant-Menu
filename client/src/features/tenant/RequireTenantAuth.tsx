@@ -13,13 +13,13 @@ export function RequireTenantAuth() {
     return <Navigate to="/tenant/login" replace state={{ from: location }} />;
   }
 
-  // URL slug must match the signed-in restaurant (prevents cross-tenant URL probing).
+  // URL slug must match the signed-in restaurant (tenant isolation).
   if (tenantSlug && tenant.slug && tenantSlug !== tenant.slug) {
-    const rest = location.pathname
-      .replace(new RegExp(`^/${tenantSlug}`), "")
-      .replace(/^\//, "");
-    const target = rest
-      ? tenantPortalPath(tenant.slug, ...rest.split("/").filter(Boolean))
+    const parts = location.pathname.split("/").filter(Boolean);
+    // /r/{wrongSlug}/menu → /r/{ownSlug}/menu
+    const page = parts[2];
+    const target = page
+      ? tenantPortalPath(tenant.slug, page, ...parts.slice(3))
       : tenantPortalPath(tenant.slug);
     return <Navigate to={`${target}${location.search}`} replace />;
   }
