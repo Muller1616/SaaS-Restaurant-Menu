@@ -1,8 +1,16 @@
 import { z } from "zod";
 import { logActivity } from "../../lib/activity-log.js";
+import {
+  cacheGet,
+  cacheSet,
+  CacheKeys,
+  CacheTtl,
+  invalidateCachesForBranch,
+} from "../../lib/cache/index.js";
 import { toPublicMediaUrl } from "../../lib/media-url.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error.js";
+import { buildPublicQrUrl } from "../../services/qr-url.js";
 import {
   computeSubscriptionView,
   syncSubscriptionStatus,
@@ -135,7 +143,7 @@ export async function getMenuWorkspace(branchId: string) {
       : null,
     itemCount,
     canAddItem,
-    previewUrl: `/r/${branch.tenant.slug}/${branch.slug}`,
+    previewUrl: buildPublicQrUrl(branch.publicQrId),
     categories: branch.categories.map((category) => ({
       id: category.id,
       name: category.name,
@@ -168,6 +176,7 @@ export async function createCategory(
     entityId: category.id,
   });
 
+  await invalidateCachesForBranch(branchId);
   return category;
 }
 
@@ -199,6 +208,7 @@ export async function updateCategory(
     entityId: category.id,
   });
 
+  await invalidateCachesForBranch(branchId);
   return category;
 }
 
@@ -234,6 +244,7 @@ export async function deleteCategory(
     details: { itemCount: existing._count.menuItems },
   });
 
+  await invalidateCachesForBranch(branchId);
   return { id: categoryId, deleted: true };
 }
 
@@ -294,6 +305,7 @@ export async function createMenuItem(
     entityId: item.id,
   });
 
+  await invalidateCachesForBranch(branchId);
   return serializeItem(item);
 }
 
@@ -340,6 +352,7 @@ export async function updateMenuItem(
     entityId: item.id,
   });
 
+  await invalidateCachesForBranch(branchId);
   return serializeItem(item);
 }
 
@@ -366,10 +379,137 @@ export async function deleteMenuItem(
     entityId: itemId,
   });
 
+  await invalidateCachesForBranch(branchId);
   return { id: itemId, deleted: true };
 }
 
+export async function getPublicMenuByQrId(publicQrId: string) {
+  const key = CacheKeys.publicMenuByQr(publicQrId);
+  const cached = await cacheGet<Awaited<ReturnType<typeof loadPublicMenuByQrId>>>(
+    key,
+  );
+  if (cached) return cached;
+  const fresh = await loadPublicMenuByQrId(publicQrId);
+  await cacheSet(
+    key,
+    fresh,
+    fresh.unavailable ? CacheTtl.publicMenuUnavailable : CacheTtl.publicMenu,
+  );
+  return fresh;
+}
+
+async function loadPublicMenuByQrId(publicQrId: string) {
+  const branch = await prisma.branch.findFirst({
+    where: {
+      publicQrId,
+      deletedAt: null,
+      isActive: true,
+    },
+    include: {
+      tenant: true,
+      subscription: true,
+      categories: {
+        where: { isActive: true },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        include: {
+          menuItems: {
+            where: { isAvailable: true, deletedAt: null },
+            orderBy: [
+              { isFeatured: "desc" },
+              { sortOrder: "asc" },
+              { name: "asc" },
+            ],
+          },
+        },
+      },
+    },
+  });
+
+  if (!branch) {
+    throw new AppError(404, "Menu not found");
+  }
+
+  const tenant = branch.tenant;
+
+  if (tenant.status === "REJECTED") {
+    throw new AppError(404, "Menu not found");
+  }
+
+  if (tenant.status === "PENDING_APPROVAL") {
+    return {
+      unavailable: true as const,
+      reason: "pending" as const,
+      businessName: tenant.businessName,
+      logoUrl: toPublicMediaUrl(tenant.logoUrl),
+      message:
+        "This restaurant is still being set up. Please check back soon.",
+      phone: tenant.phone,
+      location: tenant.businessLocation,
+    };
+  }
+
+  if (tenant.status === "SUSPENDED") {
+    return {
+      unavailable: true as const,
+      reason: "suspended" as const,
+      businessName: tenant.businessName,
+      logoUrl: toPublicMediaUrl(tenant.logoUrl),
+      message: "This menu isn’t available right now",
+      phone: null as string | null,
+      location: tenant.businessLocation,
+    };
+  }
+
+  let subStatus = branch.subscription?.status ?? null;
+  if (branch.subscription) {
+    const fresh = await syncSubscriptionStatus(branch.subscription.id);
+    subStatus = fresh?.status ?? subStatus;
+  }
+
+  if (!subStatus || ["EXPIRED", "SUSPENDED", "CANCELLED"].includes(subStatus)) {
+    return {
+      unavailable: true as const,
+      reason: "expired" as const,
+      businessName: tenant.businessName,
+      logoUrl: toPublicMediaUrl(tenant.logoUrl),
+      branchName: branch.name,
+      location: branch.location,
+      phone: branch.phone,
+      message:
+        "This menu is temporarily unavailable. Please check back later.",
+    };
+  }
+
+  return {
+    unavailable: false as const,
+    businessName: tenant.businessName,
+    logoUrl: toPublicMediaUrl(tenant.logoUrl),
+    branchName: branch.name,
+    location: branch.location,
+    phone: branch.phone,
+    categories: branch.categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      description: category.description,
+      items: category.menuItems.map(serializeItem),
+    })),
+  };
+}
+
 export async function getPublicMenu(tenantSlug: string, branchSlug?: string) {
+  const key = CacheKeys.publicMenuBySlug(tenantSlug, branchSlug);
+  const cached = await cacheGet<Awaited<ReturnType<typeof loadPublicMenu>>>(key);
+  if (cached) return cached;
+  const fresh = await loadPublicMenu(tenantSlug, branchSlug);
+  await cacheSet(
+    key,
+    fresh,
+    fresh.unavailable ? CacheTtl.publicMenuUnavailable : CacheTtl.publicMenu,
+  );
+  return fresh;
+}
+
+async function loadPublicMenu(tenantSlug: string, branchSlug?: string) {
   const tenant = await prisma.tenant.findUnique({
     where: { slug: tenantSlug },
   });
@@ -436,11 +576,8 @@ export async function getPublicMenu(tenantSlug: string, branchSlug?: string) {
 
   let subStatus = branch.subscription?.status ?? null;
   if (branch.subscription) {
-    await syncSubscriptionStatus(branch.subscription.id);
-    const fresh = await prisma.subscription.findUnique({
-      where: { id: branch.subscription.id },
-    });
-    subStatus = fresh?.status ?? null;
+    const fresh = await syncSubscriptionStatus(branch.subscription.id);
+    subStatus = fresh?.status ?? subStatus;
   }
 
   if (!subStatus || ["EXPIRED", "SUSPENDED", "CANCELLED"].includes(subStatus)) {
