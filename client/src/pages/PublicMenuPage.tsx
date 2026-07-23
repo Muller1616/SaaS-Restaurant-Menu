@@ -87,6 +87,8 @@ export function PublicMenuPage() {
     queryKey: ["public-menu", publicId],
     queryFn: () => fetchPublicMenu(publicId),
     enabled: Boolean(publicId),
+    staleTime: 60_000,
+    gcTime: 15 * 60_000,
   });
 
   useEffect(() => {

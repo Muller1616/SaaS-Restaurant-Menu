@@ -59,7 +59,11 @@ export function RegisterPage() {
     planName: string;
   } | null>(null);
 
-  const plans = useQuery({ queryKey: ["plans"], queryFn: fetchPlans });
+  const plans = useQuery({
+    queryKey: ["plans"],
+    queryFn: fetchPlans,
+    staleTime: 10 * 60_000,
+  });
 
   const {
     register,

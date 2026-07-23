@@ -75,7 +75,11 @@ function Reveal({
 }
 
 export function HomePage() {
-  const plans = useQuery({ queryKey: ["plans"], queryFn: fetchPlans });
+  const plans = useQuery({
+    queryKey: ["plans"],
+    queryFn: fetchPlans,
+    staleTime: 10 * 60_000,
+  });
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[var(--night)] text-[var(--mist)]">
