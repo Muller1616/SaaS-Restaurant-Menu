@@ -1,6 +1,9 @@
-# KitchenOS production blueprint (this repo's definitive Render config).
-# Deploy from: https://dashboard.render.com → New → Blueprint
-# Requires: GitHub repo with this file at the repository root.
+# PAID / Starter blueprint only (disk + Render Redis + Render Postgres).
+# Do NOT use this Blueprint on Render Free — Free has no persistent disks and
+# no free Render Postgres/Redis. For free-tier deploy: create a Free Docker
+# Web Service manually + Neon Postgres + Upstash Redis (see deployment guide).
+#
+# Deploy paid stack from: https://dashboard.render.com → New → Blueprint
 
 services:
   - type: web
