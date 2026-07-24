@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Suspense, lazy, type ReactNode } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -11,6 +12,7 @@ import {
 import { AdminAuthProvider } from "./features/admin/AdminAuthContext";
 import { AdminLayout } from "./features/admin/AdminLayout";
 import { RequireAdminAuth } from "./features/admin/RequireAdminAuth";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { NavigationHistoryProvider } from "./features/navigation/NavigationHistoryContext";
 import { RouteTransitionOutlet } from "./features/navigation/PageTransition";
 import { RequireTenantAuth } from "./features/tenant/RequireTenantAuth";
@@ -19,38 +21,140 @@ import {
   useTenantAuth,
 } from "./features/tenant/TenantAuthContext";
 import { TenantLayout } from "./features/tenant/TenantLayout";
-import { AdminActivityPage } from "./pages/admin/AdminActivityPage";
-import { AdminApprovalsPage } from "./pages/admin/AdminApprovalsPage";
-import { AdminDashboardPage } from "./pages/admin/AdminDashboardPage";
-import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
-import { AdminNotificationsPage } from "./pages/admin/AdminNotificationsPage";
-import { AdminBranchesPage } from "./pages/admin/AdminBranchesPage";
-import { AdminPaymentsPage } from "./pages/admin/AdminPaymentsPage";
-import { AdminPlansPage } from "./pages/admin/AdminPlansPage";
-import { AdminSettingsPage } from "./pages/admin/AdminSettingsPage";
-import { AdminSubscriptionsPage } from "./pages/admin/AdminSubscriptionsPage";
-import { AdminTenantsPage } from "./pages/admin/AdminTenantsPage";
 import { HomePage } from "./pages/HomePage";
-import { PublicMenuPage } from "./pages/PublicMenuPage";
-import { RegisterPage } from "./pages/RegisterPage";
-import { TenantActivatePage } from "./pages/tenant/TenantActivatePage";
-import { TenantAnalyticsPage } from "./pages/tenant/TenantAnalyticsPage";
-import { TenantBranchesPage } from "./pages/tenant/TenantBranchesPage";
-import { TenantChangePasswordPage } from "./pages/tenant/TenantChangePasswordPage";
-import { TenantDashboardPage } from "./pages/tenant/TenantDashboardPage";
-import { TenantForgotPasswordPage } from "./pages/tenant/TenantForgotPasswordPage";
+import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
 import { TenantLoginPage } from "./pages/tenant/TenantLoginPage";
-import { TenantMenuPage } from "./pages/tenant/TenantMenuPage";
-import { TenantNotificationsPage } from "./pages/tenant/TenantNotificationsPage";
-import { TenantPaymentsPage } from "./pages/tenant/TenantPaymentsPage";
-import { TenantQrPage } from "./pages/tenant/TenantQrPage";
-import { TenantResetPasswordPage } from "./pages/tenant/TenantResetPasswordPage";
-import { TenantSettingsPage } from "./pages/tenant/TenantSettingsPage";
-import { TenantSubscriptionPage } from "./pages/tenant/TenantSubscriptionPage";
 import {
   looksLikePublicQrId,
   tenantPortalPath,
 } from "./lib/tenant-paths";
+
+const PublicMenuPage = lazy(() =>
+  import("./pages/PublicMenuPage").then((m) => ({
+    default: m.PublicMenuPage,
+  })),
+);
+const RegisterPage = lazy(() =>
+  import("./pages/RegisterPage").then((m) => ({
+    default: m.RegisterPage,
+  })),
+);
+const AdminActivityPage = lazy(() =>
+  import("./pages/admin/AdminActivityPage").then((m) => ({
+    default: m.AdminActivityPage,
+  })),
+);
+const AdminApprovalsPage = lazy(() =>
+  import("./pages/admin/AdminApprovalsPage").then((m) => ({
+    default: m.AdminApprovalsPage,
+  })),
+);
+const AdminDashboardPage = lazy(() =>
+  import("./pages/admin/AdminDashboardPage").then((m) => ({
+    default: m.AdminDashboardPage,
+  })),
+);
+const AdminNotificationsPage = lazy(() =>
+  import("./pages/admin/AdminNotificationsPage").then((m) => ({
+    default: m.AdminNotificationsPage,
+  })),
+);
+const AdminBranchesPage = lazy(() =>
+  import("./pages/admin/AdminBranchesPage").then((m) => ({
+    default: m.AdminBranchesPage,
+  })),
+);
+const AdminPaymentsPage = lazy(() =>
+  import("./pages/admin/AdminPaymentsPage").then((m) => ({
+    default: m.AdminPaymentsPage,
+  })),
+);
+const AdminPlansPage = lazy(() =>
+  import("./pages/admin/AdminPlansPage").then((m) => ({
+    default: m.AdminPlansPage,
+  })),
+);
+const AdminSettingsPage = lazy(() =>
+  import("./pages/admin/AdminSettingsPage").then((m) => ({
+    default: m.AdminSettingsPage,
+  })),
+);
+const AdminSubscriptionsPage = lazy(() =>
+  import("./pages/admin/AdminSubscriptionsPage").then((m) => ({
+    default: m.AdminSubscriptionsPage,
+  })),
+);
+const AdminTenantsPage = lazy(() =>
+  import("./pages/admin/AdminTenantsPage").then((m) => ({
+    default: m.AdminTenantsPage,
+  })),
+);
+
+const TenantActivatePage = lazy(() =>
+  import("./pages/tenant/TenantActivatePage").then((m) => ({
+    default: m.TenantActivatePage,
+  })),
+);
+const TenantAnalyticsPage = lazy(() =>
+  import("./pages/tenant/TenantAnalyticsPage").then((m) => ({
+    default: m.TenantAnalyticsPage,
+  })),
+);
+const TenantBranchesPage = lazy(() =>
+  import("./pages/tenant/TenantBranchesPage").then((m) => ({
+    default: m.TenantBranchesPage,
+  })),
+);
+const TenantChangePasswordPage = lazy(() =>
+  import("./pages/tenant/TenantChangePasswordPage").then((m) => ({
+    default: m.TenantChangePasswordPage,
+  })),
+);
+const TenantDashboardPage = lazy(() =>
+  import("./pages/tenant/TenantDashboardPage").then((m) => ({
+    default: m.TenantDashboardPage,
+  })),
+);
+const TenantForgotPasswordPage = lazy(() =>
+  import("./pages/tenant/TenantForgotPasswordPage").then((m) => ({
+    default: m.TenantForgotPasswordPage,
+  })),
+);
+const TenantMenuPage = lazy(() =>
+  import("./pages/tenant/TenantMenuPage").then((m) => ({
+    default: m.TenantMenuPage,
+  })),
+);
+const TenantNotificationsPage = lazy(() =>
+  import("./pages/tenant/TenantNotificationsPage").then((m) => ({
+    default: m.TenantNotificationsPage,
+  })),
+);
+const TenantPaymentsPage = lazy(() =>
+  import("./pages/tenant/TenantPaymentsPage").then((m) => ({
+    default: m.TenantPaymentsPage,
+  })),
+);
+const TenantQrPage = lazy(() =>
+  import("./pages/tenant/TenantQrPage").then((m) => ({
+    default: m.TenantQrPage,
+  })),
+);
+const TenantResetPasswordPage = lazy(() =>
+  import("./pages/tenant/TenantResetPasswordPage").then((m) => ({
+    default: m.TenantResetPasswordPage,
+  })),
+);
+const TenantSettingsPage = lazy(() =>
+  import("./pages/tenant/TenantSettingsPage").then((m) => ({
+    default: m.TenantSettingsPage,
+  })),
+);
+const TenantSubscriptionPage = lazy(() =>
+  import("./pages/tenant/TenantSubscriptionPage").then((m) => ({
+    default: m.TenantSubscriptionPage,
+  })),
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,6 +166,18 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center text-sm text-[var(--muted)]">
+      Loading…
+    </div>
+  );
+}
+
+function LazyRoute({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<RouteFallback />}>{children}</Suspense>;
+}
 
 /** Old `/tenant/activate/:slug/:token` → `/r/:slug/activate/:token`. */
 function LegacyActivateRedirect() {
@@ -118,14 +234,15 @@ function LegacyTenantPortalRedirect() {
  * Single `/r/:tenantSlug` tree:
  * - 32-hex opaque QR id → customer public menu (never portal)
  * - tenant slug + portal segment → authenticated workspace
- *
- * Important: a separate sibling `/r/:publicId` route used to compete with
- * this tree's index (`→ dashboard`), so Preview Menu landed on the portal.
  */
 function PublicOrTenantPortal() {
   const { tenantSlug } = useParams();
   if (tenantSlug && looksLikePublicQrId(tenantSlug)) {
-    return <PublicMenuPage />;
+    return (
+      <LazyRoute>
+        <PublicMenuPage />
+      </LazyRoute>
+    );
   }
   return <Outlet />;
 }
@@ -140,15 +257,30 @@ export default function App() {
               <Routes>
                 <Route element={<RouteTransitionOutlet />}>
                   <Route path="/" element={<HomePage />} />
-                  <Route path="/register" element={<RegisterPage />} />
+                  <Route
+                    path="/register"
+                    element={
+                      <LazyRoute>
+                        <RegisterPage />
+                      </LazyRoute>
+                    }
+                  />
                   <Route path="/tenant/login" element={<TenantLoginPage />} />
                   <Route
                     path="/tenant/forgot-password"
-                    element={<TenantForgotPasswordPage />}
+                    element={
+                      <LazyRoute>
+                        <TenantForgotPasswordPage />
+                      </LazyRoute>
+                    }
                   />
                   <Route
                     path="/tenant/reset-password"
-                    element={<TenantResetPasswordPage />}
+                    element={
+                      <LazyRoute>
+                        <TenantResetPasswordPage />
+                      </LazyRoute>
+                    }
                   />
                   <Route
                     path="/tenant/activate/:slug/:token"
@@ -163,15 +295,15 @@ export default function App() {
                   element={<LegacyTenantPortalRedirect />}
                 />
 
-                {/*
-                  /r/{publicQrId} → public menu
-                  /r/{tenant-slug}/… → tenant portal
-                */}
                 <Route path="/r/:tenantSlug" element={<PublicOrTenantPortal />}>
                   <Route element={<RouteTransitionOutlet />}>
                     <Route
                       path="activate/:activationToken"
-                      element={<TenantActivatePage />}
+                      element={
+                        <LazyRoute>
+                          <TenantActivatePage />
+                        </LazyRoute>
+                      }
                     />
                   </Route>
 
@@ -179,39 +311,100 @@ export default function App() {
                     <Route element={<RouteTransitionOutlet />}>
                       <Route
                         path="change-password"
-                        element={<TenantChangePasswordPage />}
+                        element={
+                          <LazyRoute>
+                            <TenantChangePasswordPage />
+                          </LazyRoute>
+                        }
                       />
                     </Route>
-                    <Route element={<TenantLayout />}>
+                    <Route
+                      element={
+                        <AppErrorBoundary>
+                          <TenantLayout />
+                        </AppErrorBoundary>
+                      }
+                    >
                       <Route
                         index
                         element={<Navigate to="dashboard" replace />}
                       />
                       <Route
                         path="dashboard"
-                        element={<TenantDashboardPage />}
+                        element={
+                          <LazyRoute>
+                            <TenantDashboardPage />
+                          </LazyRoute>
+                        }
                       />
-                      <Route path="branch" element={<TenantBranchesPage />} />
+                      <Route
+                        path="branch"
+                        element={
+                          <LazyRoute>
+                            <TenantBranchesPage />
+                          </LazyRoute>
+                        }
+                      />
                       <Route
                         path="branches"
                         element={<Navigate to="../branch" replace />}
                       />
-                      <Route path="menu" element={<TenantMenuPage />} />
-                      <Route path="qr" element={<TenantQrPage />} />
+                      <Route
+                        path="menu"
+                        element={
+                          <LazyRoute>
+                            <TenantMenuPage />
+                          </LazyRoute>
+                        }
+                      />
+                      <Route
+                        path="qr"
+                        element={
+                          <LazyRoute>
+                            <TenantQrPage />
+                          </LazyRoute>
+                        }
+                      />
                       <Route
                         path="analytics"
-                        element={<TenantAnalyticsPage />}
+                        element={
+                          <LazyRoute>
+                            <TenantAnalyticsPage />
+                          </LazyRoute>
+                        }
                       />
                       <Route
                         path="subscription"
-                        element={<TenantSubscriptionPage />}
+                        element={
+                          <LazyRoute>
+                            <TenantSubscriptionPage />
+                          </LazyRoute>
+                        }
                       />
-                      <Route path="payments" element={<TenantPaymentsPage />} />
+                      <Route
+                        path="payments"
+                        element={
+                          <LazyRoute>
+                            <TenantPaymentsPage />
+                          </LazyRoute>
+                        }
+                      />
                       <Route
                         path="notifications"
-                        element={<TenantNotificationsPage />}
+                        element={
+                          <LazyRoute>
+                            <TenantNotificationsPage />
+                          </LazyRoute>
+                        }
                       />
-                      <Route path="settings" element={<TenantSettingsPage />} />
+                      <Route
+                        path="settings"
+                        element={
+                          <LazyRoute>
+                            <TenantSettingsPage />
+                          </LazyRoute>
+                        }
+                      />
                       <Route
                         path="*"
                         element={<Navigate to="dashboard" replace />}
@@ -221,27 +414,97 @@ export default function App() {
                 </Route>
 
                 <Route path="/admin" element={<RequireAdminAuth />}>
-                  <Route element={<AdminLayout />}>
+                  <Route
+                    element={
+                      <AppErrorBoundary>
+                        <AdminLayout />
+                      </AppErrorBoundary>
+                    }
+                  >
                     <Route
                       index
                       element={<Navigate to="dashboard" replace />}
                     />
-                    <Route path="dashboard" element={<AdminDashboardPage />} />
-                    <Route path="tenants" element={<AdminTenantsPage />} />
-                    <Route path="branches" element={<AdminBranchesPage />} />
-                    <Route path="approvals" element={<AdminApprovalsPage />} />
+                    <Route
+                      path="dashboard"
+                      element={
+                        <LazyRoute>
+                          <AdminDashboardPage />
+                        </LazyRoute>
+                      }
+                    />
+                    <Route
+                      path="tenants"
+                      element={
+                        <LazyRoute>
+                          <AdminTenantsPage />
+                        </LazyRoute>
+                      }
+                    />
+                    <Route
+                      path="branches"
+                      element={
+                        <LazyRoute>
+                          <AdminBranchesPage />
+                        </LazyRoute>
+                      }
+                    />
+                    <Route
+                      path="approvals"
+                      element={
+                        <LazyRoute>
+                          <AdminApprovalsPage />
+                        </LazyRoute>
+                      }
+                    />
                     <Route
                       path="subscriptions"
-                      element={<AdminSubscriptionsPage />}
+                      element={
+                        <LazyRoute>
+                          <AdminSubscriptionsPage />
+                        </LazyRoute>
+                      }
                     />
-                    <Route path="payments" element={<AdminPaymentsPage />} />
-                    <Route path="plans" element={<AdminPlansPage />} />
+                    <Route
+                      path="payments"
+                      element={
+                        <LazyRoute>
+                          <AdminPaymentsPage />
+                        </LazyRoute>
+                      }
+                    />
+                    <Route
+                      path="plans"
+                      element={
+                        <LazyRoute>
+                          <AdminPlansPage />
+                        </LazyRoute>
+                      }
+                    />
                     <Route
                       path="notifications"
-                      element={<AdminNotificationsPage />}
+                      element={
+                        <LazyRoute>
+                          <AdminNotificationsPage />
+                        </LazyRoute>
+                      }
                     />
-                    <Route path="activity" element={<AdminActivityPage />} />
-                    <Route path="settings" element={<AdminSettingsPage />} />
+                    <Route
+                      path="activity"
+                      element={
+                        <LazyRoute>
+                          <AdminActivityPage />
+                        </LazyRoute>
+                      }
+                    />
+                    <Route
+                      path="settings"
+                      element={
+                        <LazyRoute>
+                          <AdminSettingsPage />
+                        </LazyRoute>
+                      }
+                    />
                     <Route
                       path="*"
                       element={<Navigate to="dashboard" replace />}
@@ -249,7 +512,6 @@ export default function App() {
                   </Route>
                 </Route>
 
-                {/* Legacy bare-slug portal (after reserved routes) */}
                 <Route
                   path="/:tenantSlug/*"
                   element={<LegacyBareSlugRedirect />}

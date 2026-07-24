@@ -70,13 +70,16 @@ export function TenantAuthProvider({ children }: { children: ReactNode }) {
     setStatus("anonymous");
   }, []);
 
-  const applySession = useCallback((nextToken: string, nextTenant: TenantSession) => {
-    setTenantSession(nextToken, nextTenant);
-    setToken(nextToken);
-    setTenant(nextTenant);
-    setBranchState(getCurrentBranchId());
-    setStatus("authenticated");
-  }, []);
+  const applySession = useCallback(
+    (nextToken: string, nextTenant: TenantSession, rememberMe = true) => {
+      setTenantSession(nextToken, nextTenant, rememberMe);
+      setToken(nextToken);
+      setTenant(nextTenant);
+      setBranchState(getCurrentBranchId());
+      setStatus("authenticated");
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -99,7 +102,11 @@ export function TenantAuthProvider({ children }: { children: ReactNode }) {
           "/auth/tenant/me",
         );
         if (cancelled) return;
-        applySession(existingToken, data.data);
+        applySession(
+          existingToken,
+          data.data,
+          Boolean(localStorage.getItem("kitchenos_tenant_token")),
+        );
       } catch {
         if (!cancelled) applyAnonymous();
       }
@@ -138,7 +145,7 @@ export function TenantAuthProvider({ children }: { children: ReactNode }) {
         },
       );
 
-      applySession(data.data.token, data.data.tenant);
+      applySession(data.data.token, data.data.tenant, rememberMe);
       return data.data.tenant;
     },
     [applySession],

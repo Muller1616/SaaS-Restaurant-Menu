@@ -54,12 +54,15 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     setStatus("anonymous");
   }, []);
 
-  const applySession = useCallback((nextToken: string, nextAdmin: AdminUser) => {
-    setAdminSession(nextToken, nextAdmin);
-    setToken(nextToken);
-    setAdmin(nextAdmin);
-    setStatus("authenticated");
-  }, []);
+  const applySession = useCallback(
+    (nextToken: string, nextAdmin: AdminUser, rememberMe = true) => {
+      setAdminSession(nextToken, nextAdmin, rememberMe);
+      setToken(nextToken);
+      setAdmin(nextAdmin);
+      setStatus("authenticated");
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -89,7 +92,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
           name: data.data.name,
           email: data.data.email,
           role: data.data.role,
-        });
+        }, Boolean(localStorage.getItem("kitchenos_admin_token")));
       } catch {
         if (!cancelled) applyAnonymous();
       }
@@ -125,7 +128,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
         password,
         rememberMe,
       });
-      applySession(data.data.token, data.data.admin);
+      applySession(data.data.token, data.data.admin, rememberMe);
     },
     [applySession],
   );
