@@ -51,7 +51,26 @@ export function createApp() {
       credentials: true,
     }),
   );
-  app.use(morgan(env.nodeEnv === "development" ? "dev" : "combined"));
+  // Scrub secrets from access logs (activation/reset tokens in query strings).
+  morgan.token("url-safe", (req) => {
+    const raw =
+      ("originalUrl" in req && typeof (req as { originalUrl?: string }).originalUrl === "string"
+        ? (req as { originalUrl: string }).originalUrl
+        : null) ||
+      req.url ||
+      "";
+    return raw.replace(
+      /([?&](?:token|activationToken|resetToken|otp|code)=)[^&]*/gi,
+      "$1[redacted]",
+    );
+  });
+  app.use(
+    morgan(
+      env.nodeEnv === "development"
+        ? "dev"
+        : ':remote-addr - :remote-user [:date[clf]] ":method :url-safe HTTP/:http-version" :status :res[content-length]',
+    ),
+  );
   app.use(cookieParser());
   app.use(express.json({ limit: "2mb" }));
   app.use(express.urlencoded({ extended: true }));

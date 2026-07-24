@@ -10,6 +10,8 @@ export type AccessTokenPayload = {
   role: JwtRole;
   email: string;
   name: string;
+  /** Must match AdminUser.tokenVersion / Tenant.tokenVersion or the token is rejected. */
+  tokenVersion: number;
   /** Present when role === ADMIN — DB AdminRole for RBAC. */
   adminRole?: JwtAdminRole;
 };
@@ -26,5 +28,9 @@ export function signAccessToken(
 }
 
 export function verifyAccessToken(token: string): AccessTokenPayload {
-  return jwt.verify(token, env.jwtSecret) as AccessTokenPayload;
+  const payload = jwt.verify(token, env.jwtSecret) as AccessTokenPayload;
+  if (typeof payload.tokenVersion !== "number") {
+    throw new Error("Missing tokenVersion claim");
+  }
+  return payload;
 }

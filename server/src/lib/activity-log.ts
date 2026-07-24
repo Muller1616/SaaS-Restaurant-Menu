@@ -2,7 +2,7 @@ import type { ActivityAction, ActivityUserType, Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
 
 const SENSITIVE_KEY =
-  /^(password|passwordhash|temporarypassword|newpassword|currentpassword|token|tokencsrf|csrftoken|secret|authorization|apikey|rawtoken|plainpassword)$/i;
+  /^(password|passwordhash|temporarypassword|newpassword|currentpassword|token|tokencsrf|csrftoken|secret|authorization|apikey|rawtoken|plainpassword|otp|otphash|resettoken|activationtoken|activationurl|reseturl|bearer)$/i;
 
 const ACTION_PHRASE: Record<ActivityAction, string> = {
   LOGIN: "signed in",
