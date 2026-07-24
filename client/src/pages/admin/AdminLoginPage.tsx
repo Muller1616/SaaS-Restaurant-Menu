@@ -7,12 +7,12 @@ import {
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
-import axios from "axios";
 import { useState } from "react";
 import { useAdminAuth } from "../../features/admin/AdminAuthContext";
 import { AdminForgotPasswordModal } from "../../features/admin/AdminForgotPasswordModal";
 import { safeAdminReturnPath } from "../../lib/admin-session";
 import { SESSION_IDLE_MESSAGE } from "../../lib/session-timeout-config";
+import { getUserFacingError } from "../../lib/user-facing-error";
 
 const loginSchema = z.object({
   email: z.email("Enter a valid email"),
@@ -68,11 +68,9 @@ export function AdminLoginPage() {
       await login(values.email, values.password, values.rememberMe ?? false);
       navigate(from, { replace: true });
     } catch (error) {
-      const message = axios.isAxiosError(error)
-        ? (error.response?.data?.message as string | undefined) ??
-          "Login failed"
-        : "Login failed";
-      setError("root", { message });
+      setError("root", {
+        message: getUserFacingError(error, "Login failed"),
+      });
     }
   }
 

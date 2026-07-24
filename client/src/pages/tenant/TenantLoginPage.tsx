@@ -1,5 +1,4 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import axios from "axios";
 import { useForm } from "react-hook-form";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
@@ -11,6 +10,7 @@ import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { SESSION_IDLE_MESSAGE } from "../../lib/session-timeout-config";
 import { safeTenantReturnPath } from "../../lib/tenant-session";
 import { tenantPortalPath } from "../../lib/tenant-paths";
+import { getUserFacingError } from "../../lib/user-facing-error";
 
 const loginSchema = z.object({
   email: z.email("Enter a valid email"),
@@ -80,10 +80,9 @@ export function TenantLoginPage() {
         { replace: true },
       );
     } catch (error) {
-      const message = axios.isAxiosError(error)
-        ? (error.response?.data?.message as string | undefined) || "Login failed"
-        : "Login failed";
-      setError("root", { message });
+      setError("root", {
+        message: getUserFacingError(error, "Login failed"),
+      });
     }
   }
 

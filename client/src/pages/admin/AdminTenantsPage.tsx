@@ -62,10 +62,9 @@ type TenantDetail = {
 type ActivationResendResult = {
   email: string;
   businessName: string;
-  temporaryPassword: string;
-  activationUrl: string;
   loginUrl: string;
   emailDelivered?: boolean;
+  message?: string;
 };
 
 async function fetchTenants(params: {
@@ -501,9 +500,8 @@ export function AdminTenantsPage() {
               {activationCreds.businessName}
             </h3>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              {activationCreds.emailDelivered === false
-                ? "Email could not be delivered. Copy these credentials now."
-                : "A new activation email was sent. Copy the link and temporary password — shown once."}
+              {activationCreds.message ??
+                "A new activation email was sent to the owner. Credentials are only in that email — never shown here."}
             </p>
             <div className="mt-5 space-y-2 rounded-2xl border border-[var(--line)] bg-black/25 p-4 text-sm text-white">
               <p>
@@ -511,14 +509,13 @@ export function AdminTenantsPage() {
                 {activationCreds.email}
               </p>
               <p>
-                <span className="text-[var(--muted)]">Temporary password:</span>{" "}
-                <span className="font-mono text-[var(--gold-soft)]">
-                  {activationCreds.temporaryPassword}
-                </span>
-              </p>
-              <p className="break-all">
-                <span className="text-[var(--muted)]">Activation link:</span>{" "}
-                {activationCreds.activationUrl}
+                <span className="text-[var(--muted)]">Login:</span>{" "}
+                <a
+                  href={activationCreds.loginUrl}
+                  className="text-[var(--gold-soft)] underline"
+                >
+                  {activationCreds.loginUrl}
+                </a>
               </p>
             </div>
             <button

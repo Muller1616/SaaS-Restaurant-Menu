@@ -77,7 +77,7 @@ export function TenantAnalyticsPage() {
             : analyticsLevel === "basic"
               ? "Basic plan: 7-day trends."
               : "Upgrade to Basic or higher to unlock guest scan insights."}{" "}
-          Auto-refreshes every 30 seconds.
+          Auto-refreshes every 90 seconds.
         </p>
       </div>
 

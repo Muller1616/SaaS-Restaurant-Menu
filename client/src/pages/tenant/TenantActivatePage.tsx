@@ -1,12 +1,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import axios from "axios";
 import { useState, type FormEvent } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { z } from "zod";
 import { BackButton } from "../../components/BackButton";
 import { PasswordRequirements } from "../../components/PasswordRequirements";
+import { getUserFacingError } from "../../lib/user-facing-error";
 import { api, type ApiSuccess } from "../../lib/api";
 import { strongPasswordSchema } from "../../lib/password-policy";
 
@@ -56,9 +56,9 @@ export function TenantActivatePage() {
     queryKey: ["tenant", "activate", slugValue, tokenValue],
     enabled: Boolean(slugValue && tokenValue),
     queryFn: async () => {
-      const { data } = await api.get<ApiSuccess<Preview>>(
-        "/auth/tenant/activate",
-        { params: { slug: slugValue, token: tokenValue } },
+      const { data } = await api.post<ApiSuccess<Preview>>(
+        "/auth/tenant/activate/preview",
+        { slug: slugValue, token: tokenValue },
       );
       return data.data;
     },
@@ -95,9 +95,7 @@ export function TenantActivatePage() {
       navigate("/tenant/login", { replace: true });
     } catch (error) {
       setError("root", {
-        message: axios.isAxiosError(error)
-          ? (error.response?.data?.message as string) || "Activation failed"
-          : "Activation failed",
+        message: getUserFacingError(error, "Activation failed"),
       });
     }
   }
@@ -114,10 +112,7 @@ export function TenantActivatePage() {
       setResendMessage(data.data.message);
     } catch (error) {
       setResendMessage(
-        axios.isAxiosError(error)
-          ? (error.response?.data?.message as string) ||
-              "Could not send activation email"
-          : "Could not send activation email",
+        getUserFacingError(error, "Could not send activation email"),
       );
     } finally {
       setResending(false);
