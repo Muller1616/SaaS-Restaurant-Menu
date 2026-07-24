@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { publicQrPath, tenantPortalPath } from "../../lib/tenant-paths";
 import { api, type ApiSuccess } from "../../lib/api";
+import { formatAdminDateTime } from "../../lib/datetime";
 import { refreshQueries } from "../../lib/refresh-queries";
 import { MediaImage } from "../../components/MediaImage";
 import { subscriptionStatusLabel } from "../../lib/status-labels";
@@ -21,6 +22,8 @@ type QrPayload = {
   menuUrl: string;
   qrCodeUrl: string;
   qrSvgUrl: string;
+  qrCreatedAt?: string;
+  qrRegeneratedAt?: string | null;
   subscriptionStatus: string | null;
   canCustomize: boolean;
   hasLogo: boolean;
@@ -97,7 +100,9 @@ export function TenantQrPage() {
     },
     onSuccess: () => {
       setCacheBust(Date.now());
-      setNotice("QR code refreshed for the current menu URL.");
+      setNotice(
+        "New QR code issued. The previous code no longer works — reprint and replace table cards.",
+      );
       setError(null);
       refreshQueries(
         queryClient,
@@ -217,6 +222,12 @@ export function TenantQrPage() {
             <p className="mt-5 break-all text-center text-xs text-[var(--muted)]">
               {qr.data.menuUrl}
             </p>
+            <p className="mt-2 text-center text-[11px] text-[var(--muted)]">
+              Token issued {formatAdminDateTime(qr.data.qrCreatedAt)}
+              {qr.data.qrRegeneratedAt
+                ? ` · last rotated ${formatAdminDateTime(qr.data.qrRegeneratedAt)}`
+                : ""}
+            </p>
           </section>
 
           <div className="space-y-4">
@@ -257,7 +268,12 @@ export function TenantQrPage() {
                 <p className="font-medium text-white">Tips</p>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
                   <li>
-                    Refresh the QR after renaming a branch (slug or URL change).
+                    Menu edits (items, prices, availability) appear live on this
+                    QR — no reprint needed.
+                  </li>
+                  <li>
+                    Regenerate only if a printed code was lost or compromised;
+                    the old token stops working immediately.
                   </li>
                   <li>Print uses an A4 layout with restaurant + branch name.</li>
                   <li>

@@ -53,4 +53,4 @@ npm run job:db-backup -w server
 | Register | http://localhost:5173/register |
 | Admin | http://localhost:5173/admin/login |
 | Tenant | http://localhost:5173/tenant/login |
-| Public menu | http://localhost:5173/r/:tenant/:branch |
+| Public menu | http://localhost:5173/r/:publicQrId |
