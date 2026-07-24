@@ -4,7 +4,9 @@ import axios from "axios";
 import { useEffect, useId, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { PasswordRequirements } from "../../components/PasswordRequirements";
 import { api, type ApiSuccess } from "../../lib/api";
+import { strongPasswordSchema } from "../../lib/password-policy";
 
 type Step = "email" | "otp" | "password" | "done";
 
@@ -21,8 +23,8 @@ const otpSchema = z.object({
 
 const passwordSchema = z
   .object({
-    newPassword: z.string().min(8, "Password must be at least 8 characters"),
-    confirmPassword: z.string().min(8, "Confirm your password"),
+    newPassword: strongPasswordSchema(),
+    confirmPassword: z.string().min(1, "Confirm your password"),
   })
   .refine((v) => v.newPassword === v.confirmPassword, {
     message: "Passwords do not match",
@@ -75,6 +77,8 @@ export function AdminForgotPasswordModal({
     resolver: zodResolver(passwordSchema),
     defaultValues: { newPassword: "", confirmPassword: "" },
   });
+  const newPasswordValue = passwordForm.watch("newPassword");
+  const confirmPasswordValue = passwordForm.watch("confirmPassword");
 
   useEffect(() => {
     if (!open) return;
@@ -370,6 +374,11 @@ export function AdminForgotPasswordModal({
                 autoComplete="new-password"
                 className="w-full rounded-xl border border-[var(--line)] bg-black/30 px-3 py-2.5 text-white outline-none focus:border-[var(--gold)]"
                 {...passwordForm.register("newPassword")}
+              />
+              <PasswordRequirements
+                password={newPasswordValue ?? ""}
+                confirmPassword={confirmPasswordValue}
+                showConfirmMatch
               />
               {passwordForm.formState.errors.newPassword && (
                 <p className="mt-1 text-sm text-[var(--danger)]">
