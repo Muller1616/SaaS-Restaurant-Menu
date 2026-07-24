@@ -11,6 +11,7 @@ import { toPublicMediaUrl } from "../../lib/media-url.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error.js";
 import { buildPublicQrUrl } from "../../services/qr-url.js";
+import { isRevokedQrToken } from "../qr/branch-qr-token.js";
 import {
   computeSubscriptionView,
   syncSubscriptionStatus,
@@ -427,6 +428,12 @@ async function loadPublicMenuByQrId(publicQrId: string) {
   });
 
   if (!branch) {
+    if (await isRevokedQrToken(publicQrId)) {
+      throw new AppError(
+        410,
+        "This QR code is no longer valid. Ask the restaurant for their current menu QR.",
+      );
+    }
     throw new AppError(404, "Menu not found");
   }
 

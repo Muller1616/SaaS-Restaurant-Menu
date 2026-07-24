@@ -14,6 +14,10 @@ import {
   generateBranchQr,
   buildPublicQrUrl,
 } from "../../services/qr.js";
+import {
+  recordIssuedQrToken,
+  revokeBranchQrTokens,
+} from "../qr/branch-qr-token.js";
 import { recordSubscriptionEvent } from "../subscriptions/subscription-history.js";
 
 export const branchInputSchema = z.object({
@@ -184,9 +188,17 @@ export async function createBranch(tenantId: string, input: BranchInput) {
         phone: input.phone?.trim() || tenant.phone,
         slug,
         publicQrId,
+        qrCreatedAt: now,
         isActive: true,
         isDefault: false,
       },
+    });
+
+    await recordIssuedQrToken(tx, {
+      token: publicQrId,
+      branchId: created.id,
+      tenantId,
+      actor: { type: "TENANT", id: tenantId },
     });
 
     const subscription = await tx.subscription.create({
@@ -214,6 +226,20 @@ export async function createBranch(tenantId: string, input: BranchInput) {
     include: {
       subscription: { include: { plan: true } },
       _count: { select: { menuItems: { where: { deletedAt: null } } } },
+    },
+  });
+
+  await logActivity({
+    userType: "TENANT",
+    userId: tenantId,
+    action: "CREATE",
+    entityType: "branch_qr",
+    entityId: branch.created.id,
+    summary: "QR code generated successfully",
+    details: {
+      publicQrId: branch.created.publicQrId,
+      menuUrl: qr.menuUrl,
+      branchName: updated.name,
     },
   });
 
@@ -385,6 +411,8 @@ export async function softDeleteBranch(tenantId: string, branchId: string) {
     details: { softDelete: true, name: deleted.name },
   });
 
+  await revokeBranchQrTokens(branchId);
+  await invalidatePublicMenuCache({ publicQrId: deleted.publicQrId });
   await invalidateCachesForBranch(branchId);
   return { id: deleted.id, deleted: true };
 }
