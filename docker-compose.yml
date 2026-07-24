@@ -17,6 +17,20 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: kitchenos-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - kitchenos_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   # Local SMTP catcher for registration / approval emails (SMTP_HOST=localhost:1025)
   mailpit:
     image: axllent/mailpit:latest
@@ -28,3 +42,4 @@ services:
 
 volumes:
   kitchenos_pgdata:
+  kitchenos_redis:

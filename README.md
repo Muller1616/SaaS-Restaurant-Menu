@@ -6,41 +6,81 @@ Multi-tenant QR restaurant menu platform (SRS v1.0).
 
 ```
 client/   React + TypeScript + Vite + Tailwind
-server/   Node.js + Express + Prisma + PostgreSQL
+server/   Node.js + Express + Prisma + PostgreSQL + Redis
 ```
 
-## Setup
+## Local setup
 
 ```bash
-npm run db:up
+npm run db:up          # Postgres + Redis + Mailpit
 npm install
-npm run db:migrate -w server
+cp .env.example server/.env   # then edit secrets
+npm run db:migrate -w server  # interactive migrate (dev only)
 npm run db:seed -w server
-npm run dev:server   # http://localhost:4000
-npm run dev:client   # http://localhost:5173
+npm run dev:server            # http://localhost:4000
+npm run dev:client            # http://localhost:5173
 ```
 
-Optional local email inbox (Mailpit): `docker compose up -d mailpit`, then open http://localhost:8025. SMTP defaults in `server/.env` (`SMTP_HOST=localhost`, `SMTP_PORT=1025`).
+Optional Mailpit UI: http://localhost:8025
 
-## Accounts (seed)
+## Accounts (local seed)
 
-| Role | Email | Password |
-|---|---|---|
-| Super admin | `admin@kitchenos.local` | from `ADMIN_PASSWORD` (default `Admin@12345`) |
-| Staff admin | `staff@kitchenos.local` | from `STAFF_ADMIN_PASSWORD` (default `Staff@12345`) |
-| Tenant | From registration approval | Temp password in admin modal + email |
+Set `ADMIN_EMAIL` / `ADMIN_PASSWORD` (and optional `STAFF_*`) in `server/.env` before seeding.
+Dev seed does **not** invent passwords when those vars are unset.
 
-## Production (Vercel + Render)
+| Role | Notes |
+|---|---|
+| Super admin | From `ADMIN_EMAIL` / `ADMIN_PASSWORD` |
+| Staff admin | From `STAFF_ADMIN_EMAIL` / `STAFF_ADMIN_PASSWORD` |
+| Tenant | Activation credentials are email-only after approval |
 
-1. Deploy **server** on Render (Web Service + PostgreSQL).
-2. Deploy **client** on Vercel with `VITE_API_URL=https://YOUR-API.onrender.com`.
-3. Set Render `CLIENT_URL` / `PUBLIC_APP_URL` to your Vercel HTTPS origin.
-4. Use a real SMTP provider (not localhost) and a strong `JWT_SECRET`.
-5. Attach a **persistent disk** on Render for `uploads/` (ephemeral disk loses QR/menu images on restart).
+## Production deploy (Vercel + Render)
+
+### API (Render)
+
+1. Use `render.yaml` or create a Web Service from `server/Dockerfile`.
+2. Attach **PostgreSQL** and **Redis** (`REDIS_URL` is required in production).
+3. Attach a **persistent disk** for `uploads/`.
+4. Release command is baked into the Docker image: `prisma migrate deploy` then `node dist/server.js`.
+5. Required env (HTTPS origins, no localhost):
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | Postgres with TLS (`sslmode=require`) |
+| `REDIS_URL` | Shared cache + rate limits |
+| `JWT_SECRET` | ≥32 chars, not a placeholder |
+| `CLIENT_URL` / `PUBLIC_APP_URL` | Vercel HTTPS origin |
+| `PUBLIC_API_URL` | This API’s HTTPS origin (absolute media URLs) |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Real mail provider |
+
+Optional first-time admin bootstrap (never on every deploy):
+
+```bash
+NODE_ENV=production ALLOW_PROD_SEED=1 \
+  ADMIN_EMAIL=... ADMIN_PASSWORD=... \
+  STAFF_ADMIN_EMAIL=... STAFF_ADMIN_PASSWORD=... \
+  npm run db:seed -w server
+```
+
+Password hashes are **not** reset on re-seed unless `SEED_RESET_ADMIN_PASSWORDS=1`.
+
+### Frontend (Vercel)
+
+1. Root directory: `client` (or monorepo filter).
+2. Set `VITE_API_URL=https://YOUR-API.onrender.com` (HTTPS, no trailing slash).
+3. Production builds **fail** if `VITE_API_URL` is missing, localhost, or a placeholder.
+
+### Production migrate (never use `db:migrate` against prod)
+
+```bash
+npm run db:migrate:deploy
+```
 
 ## Useful commands
 
 ```bash
+npm run build
+npm run db:migrate:deploy
 npm run job:subscription-alerts -w server
 npm run job:db-backup -w server
 ```
