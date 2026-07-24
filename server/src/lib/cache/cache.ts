@@ -28,13 +28,20 @@ const memoryStore = new Map<string, MemoryEntry>();
 let redis: Redis | null = null;
 let redisReady = false;
 
+function requiresDistributedCache() {
+  return Boolean(env.redisUrl);
+}
+
 /**
- * Optional Redis. When REDIS_URL is unset or Redis is down, falls back to
- * process-local memory (single-instance) or passthrough (no cache).
+ * Redis is required in production (see env.ts). Locally, omitting REDIS_URL
+ * uses process-local memory suitable for a single API process.
  */
 export async function initCache() {
   const url = env.redisUrl;
   if (!url) {
+    if (env.isProduction) {
+      throw new Error("REDIS_URL is required in production");
+    }
     stats.backend = "memory";
     stats.connected = true;
     logger.info("Cache: in-memory fallback (set REDIS_URL for distributed cache)");
@@ -46,16 +53,14 @@ export async function initCache() {
       maxRetriesPerRequest: 1,
       enableReadyCheck: true,
       lazyConnect: true,
-      connectTimeout: 3_000,
+      connectTimeout: 5_000,
     });
     redis = client;
 
     client.on("error", (err: Error) => {
       redisReady = false;
       stats.connected = false;
-      logger.warn("Redis cache error — falling back to memory/DB", {
-        error: err.message,
-      });
+      logger.warn("Redis cache error", { error: err.message });
     });
     client.on("ready", () => {
       redisReady = true;
@@ -75,11 +80,28 @@ export async function initCache() {
   } catch (error) {
     redis = null;
     redisReady = false;
+    stats.connected = false;
+    if (env.isProduction) {
+      throw new Error(
+        `Redis unavailable in production: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
     stats.backend = "memory";
     stats.connected = true;
     logger.warn("Redis unavailable — using in-memory cache", {
       error: error instanceof Error ? error.message : String(error),
     });
+  }
+}
+
+function assertInvalidationReady() {
+  if (!requiresDistributedCache()) return;
+  if (!redis || !redisReady) {
+    throw new Error(
+      "Cache invalidation unavailable — Redis is not connected. Retry shortly.",
+    );
   }
 }
 
@@ -98,7 +120,6 @@ function memorySet(key: string, value: string, ttlSeconds: number) {
     value,
     expiresAt: Date.now() + ttlSeconds * 1000,
   });
-  // Soft cap to avoid unbounded growth in long-running processes
   if (memoryStore.size > 5_000) {
     const first = memoryStore.keys().next().value;
     if (first) memoryStore.delete(first);
@@ -121,6 +142,7 @@ function memoryDel(patternOrKey: string) {
   return n;
 }
 
+/** Fail-open on read — miss falls through to DB. */
 export async function cacheGet<T>(key: string): Promise<T | null> {
   try {
     if (redis && redisReady) {
@@ -150,6 +172,7 @@ export async function cacheGet<T>(key: string): Promise<T | null> {
   }
 }
 
+/** Fail-open on write — missing cache is safe. */
 export async function cacheSet(
   key: string,
   value: unknown,
@@ -160,6 +183,10 @@ export async function cacheSet(
     if (redis && redisReady) {
       await redis.set(key, raw, "EX", ttlSeconds);
       stats.sets += 1;
+      return;
+    }
+    if (requiresDistributedCache()) {
+      // Redis configured but not ready — skip write rather than split-brain memory.
       return;
     }
     memorySet(key, raw, ttlSeconds);
@@ -173,8 +200,13 @@ export async function cacheSet(
   }
 }
 
+/**
+ * Fail-closed when Redis is configured: mutations must not leave stale public data.
+ * Local memory mode (no REDIS_URL) deletes in-process only.
+ */
 export async function cacheDel(...keys: string[]): Promise<void> {
   if (keys.length === 0) return;
+  assertInvalidationReady();
   try {
     if (redis && redisReady) {
       await redis.del(...keys);
@@ -185,15 +217,14 @@ export async function cacheDel(...keys: string[]): Promise<void> {
     stats.deletes += keys.length;
   } catch (error) {
     stats.errors += 1;
-    logger.warn("cacheDel failed", {
-      keys,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    logger.error("cacheDel failed", error, { keys });
+    throw error;
   }
 }
 
-/** Delete by prefix using SCAN (Redis) or memory prefix match. */
+/** Delete by prefix using SCAN (Redis) or memory prefix match. Fail-closed with Redis. */
 export async function cacheDelByPrefix(prefix: string): Promise<number> {
+  assertInvalidationReady();
   try {
     if (redis && redisReady) {
       let cursor = "0";
@@ -219,17 +250,11 @@ export async function cacheDelByPrefix(prefix: string): Promise<number> {
     return n;
   } catch (error) {
     stats.errors += 1;
-    logger.warn("cacheDelByPrefix failed", {
-      prefix,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return 0;
+    logger.error("cacheDelByPrefix failed", error, { prefix });
+    throw error;
   }
 }
 
-/**
- * Cache-aside helper: return cached value or compute, store, and return.
- */
 export async function cacheAside<T>(
   key: string,
   ttlSeconds: number,
