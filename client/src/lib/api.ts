@@ -1,5 +1,11 @@
 import axios from "axios";
 import { getApiBaseUrl } from "./api-base";
+import { clearAdminSession, getAdminToken } from "./admin-session";
+import {
+  clearTenantSession,
+  getCurrentBranchId,
+  getTenantToken,
+} from "./tenant-session";
 import {
   isTenantPortalPathname,
   looksLikePublicQrId,
@@ -52,7 +58,6 @@ function isTenantFrontendPath(path: string) {
   ) {
     return false;
   }
-  // Public QR menu — no tenant JWT required
   const parts = path.split("/").filter(Boolean);
   if (parts[0] === "r" && parts.length === 2 && looksLikePublicQrId(parts[1])) {
     return false;
@@ -64,9 +69,9 @@ function isTenantFrontendPath(path: string) {
 
 api.interceptors.request.use(async (config) => {
   const path = window.location.pathname;
-  const adminToken = localStorage.getItem("kitchenos_admin_token");
-  const tenantToken = localStorage.getItem("kitchenos_tenant_token");
-  const branchId = localStorage.getItem("kitchenos_current_branch_id");
+  const adminToken = getAdminToken();
+  const tenantToken = getTenantToken();
+  const branchId = getCurrentBranchId();
 
   const url = String(config.url ?? "");
   const prefersAdmin =
@@ -135,31 +140,27 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       const path = window.location.pathname;
       if (path.startsWith("/admin") && path !== "/admin/login") {
-        localStorage.removeItem("kitchenos_admin_token");
-        localStorage.removeItem("kitchenos_admin_user");
+        clearAdminSession();
         window.dispatchEvent(new Event("kitchenos-admin-logout"));
         window.location.assign("/admin/login?reason=session");
       }
       if (isTenantFrontendPath(path)) {
-        localStorage.removeItem("kitchenos_tenant_token");
-        localStorage.removeItem("kitchenos_tenant_user");
-        localStorage.removeItem("kitchenos_current_branch_id");
+        clearTenantSession();
         window.dispatchEvent(new Event("kitchenos-tenant-logout"));
         window.location.assign("/tenant/login?reason=session");
       }
     }
 
     if (error.response?.status === 403) {
-      const code = (error.response.data as { details?: { code?: string } } | undefined)
-        ?.details?.code;
+      const code = (
+        error.response.data as { details?: { code?: string } } | undefined
+      )?.details?.code;
       const path = window.location.pathname;
       if (
         isTenantFrontendPath(path) &&
         (code === "TENANT_SUSPENDED" || code === "TENANT_INACTIVE")
       ) {
-        localStorage.removeItem("kitchenos_tenant_token");
-        localStorage.removeItem("kitchenos_tenant_user");
-        localStorage.removeItem("kitchenos_current_branch_id");
+        clearTenantSession();
         window.dispatchEvent(new Event("kitchenos-tenant-logout"));
         window.location.assign("/tenant/login?reason=session");
       }

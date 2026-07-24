@@ -59,12 +59,29 @@ const TOKEN_KEY = "kitchenos_tenant_token";
 const USER_KEY = "kitchenos_tenant_user";
 const BRANCH_KEY = "kitchenos_current_branch_id";
 
+function readStorage(key: string): string | null {
+  return sessionStorage.getItem(key) ?? localStorage.getItem(key);
+}
+
+function writePair(
+  token: string,
+  tenant: TenantSession,
+  rememberMe: boolean,
+) {
+  const primary = rememberMe ? localStorage : sessionStorage;
+  const secondary = rememberMe ? sessionStorage : localStorage;
+  secondary.removeItem(TOKEN_KEY);
+  secondary.removeItem(USER_KEY);
+  primary.setItem(TOKEN_KEY, token);
+  primary.setItem(USER_KEY, JSON.stringify(tenant));
+}
+
 export function getTenantToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  return readStorage(TOKEN_KEY);
 }
 
 export function getStoredTenant(): TenantSession | null {
-  const raw = localStorage.getItem(USER_KEY);
+  const raw = readStorage(USER_KEY);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as TenantSession;
@@ -74,32 +91,48 @@ export function getStoredTenant(): TenantSession | null {
 }
 
 export function getCurrentBranchId() {
-  return localStorage.getItem(BRANCH_KEY);
+  return readStorage(BRANCH_KEY);
 }
 
 export function setCurrentBranchId(branchId: string) {
+  // Branch preference follows whichever store holds the session token.
+  if (sessionStorage.getItem(TOKEN_KEY)) {
+    sessionStorage.setItem(BRANCH_KEY, branchId);
+    localStorage.removeItem(BRANCH_KEY);
+    return;
+  }
   localStorage.setItem(BRANCH_KEY, branchId);
+  sessionStorage.removeItem(BRANCH_KEY);
 }
 
-export function setTenantSession(token: string, tenant: TenantSession) {
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify(tenant));
+export function setTenantSession(
+  token: string,
+  tenant: TenantSession,
+  rememberMe = true,
+) {
+  writePair(token, tenant, rememberMe);
+  const existingBranch = getCurrentBranchId();
   const branchId =
-    getCurrentBranchId() &&
-    tenant.branches.some((b) => b.id === getCurrentBranchId())
-      ? getCurrentBranchId()!
+    existingBranch && tenant.branches.some((b) => b.id === existingBranch)
+      ? existingBranch
       : tenant.defaultBranchId ?? tenant.branches[0]?.id ?? "";
   if (branchId) setCurrentBranchId(branchId);
 }
 
 export function updateStoredTenant(tenant: TenantSession) {
+  if (sessionStorage.getItem(TOKEN_KEY)) {
+    sessionStorage.setItem(USER_KEY, JSON.stringify(tenant));
+    return;
+  }
   localStorage.setItem(USER_KEY, JSON.stringify(tenant));
 }
 
 export function clearTenantSession() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-  localStorage.removeItem(BRANCH_KEY);
+  for (const store of [localStorage, sessionStorage]) {
+    store.removeItem(TOKEN_KEY);
+    store.removeItem(USER_KEY);
+    store.removeItem(BRANCH_KEY);
+  }
 }
 
 /** True when a JWT is missing, malformed, wrong role, or past `exp`. */
@@ -144,4 +177,3 @@ export function safeTenantReturnPath(
   }
   return fallback;
 }
-

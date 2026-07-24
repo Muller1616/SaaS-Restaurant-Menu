@@ -1,6 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import axios from "axios";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -10,6 +9,7 @@ import { api, type ApiSuccess } from "../lib/api";
 import { validateDeviceImage } from "../lib/device-image";
 import { formatEtb, type Plan } from "../lib/plans";
 import { BackButton } from "../components/BackButton";
+import { getUserFacingError } from "../lib/user-facing-error";
 
 const registrationSchema = z
   .object({
@@ -124,13 +124,9 @@ export function RegisterPage() {
     try {
       await mutation.mutateAsync(values);
     } catch (error) {
-      const message = axios.isAxiosError(error)
-        ? (error.response?.data?.message as string | undefined) ||
-          "Registration failed"
-        : error instanceof Error
-          ? error.message
-          : "Registration failed";
-      setError("root", { message });
+      setError("root", {
+        message: getUserFacingError(error, "Registration failed"),
+      });
     }
   }
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
+import { getUserFacingError } from "../../lib/user-facing-error";
 import { useMemo, useState } from "react";
 import { AuthenticatedImage } from "../../components/AuthenticatedImage";
 import { api, type ApiSuccess } from "../../lib/api";
@@ -35,10 +35,9 @@ type ApproveResult = {
   id: string;
   email: string;
   businessName: string;
-  temporaryPassword: string;
-  activationUrl: string;
   loginUrl: string;
   emailDelivered?: boolean;
+  message?: string;
   branch: {
     name: string;
     menuUrl: string;
@@ -106,10 +105,7 @@ export function AdminApprovalsPage() {
     },
     onError: (error) => {
       setActionError(
-        axios.isAxiosError(error)
-          ? (error.response?.data?.message as string) ||
-              "Couldn't approve registration"
-          : "Couldn't approve registration",
+        getUserFacingError(error, "Couldn't approve registration"),
       );
     },
   });
@@ -130,10 +126,7 @@ export function AdminApprovalsPage() {
     },
     onError: (error) => {
       setActionError(
-        axios.isAxiosError(error)
-          ? (error.response?.data?.message as string) ||
-              "Couldn't decline registration"
-          : "Couldn't decline registration",
+        getUserFacingError(error, "Couldn't decline registration"),
       );
     },
   });
@@ -159,10 +152,7 @@ export function AdminApprovalsPage() {
     },
     onError: (error) => {
       setActionError(
-        axios.isAxiosError(error)
-          ? (error.response?.data?.message as string) ||
-              "Couldn't approve selected registrations"
-          : "Couldn't approve selected registrations",
+        getUserFacingError(error, "Couldn't approve selected registrations"),
       );
     },
   });
@@ -189,10 +179,7 @@ export function AdminApprovalsPage() {
     },
     onError: (error) => {
       setActionError(
-        axios.isAxiosError(error)
-          ? (error.response?.data?.message as string) ||
-              "Couldn't decline selected registrations"
-          : "Couldn't decline selected registrations",
+        getUserFacingError(error, "Couldn't decline selected registrations"),
       );
     },
   });
@@ -533,28 +520,12 @@ export function AdminApprovalsPage() {
               {approvedCreds.businessName} is live
             </h3>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              {approvedCreds.emailDelivered === false
-                ? "Email could not be delivered (SMTP unavailable). Copy the activation link and temporary password and share them with the owner now — they are only shown once."
-                : "An activation email was sent to the owner. Copy the link and temporary password now — they are only shown once here."}
+              {approvedCreds.message ??
+                "Activation email sent. The restaurant owner must use the link and temporary password in that email — credentials are never shown here."}
             </p>
             <div className="mt-5 space-y-2 rounded-2xl border border-[var(--line)] bg-black/25 p-4 text-sm text-white">
               <p>
                 <span className="text-[var(--muted)]">Email:</span> {approvedCreds.email}
-              </p>
-              <p>
-                <span className="text-[var(--muted)]">Temporary password:</span>{" "}
-                <span className="font-mono text-[var(--gold-soft)]">
-                  {approvedCreds.temporaryPassword}
-                </span>
-              </p>
-              <p className="break-all">
-                <span className="text-[var(--muted)]">Activation link:</span>{" "}
-                <a
-                  href={approvedCreds.activationUrl}
-                  className="text-[var(--gold-soft)] underline"
-                >
-                  {approvedCreds.activationUrl}
-                </a>
               </p>
               <p>
                 <span className="text-[var(--muted)]">Branch:</span>{" "}
@@ -566,12 +537,6 @@ export function AdminApprovalsPage() {
               </p>
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
-              <a
-                href={approvedCreds.activationUrl}
-                className="rounded-full bg-[var(--gold)] px-5 py-2.5 text-sm font-bold text-[var(--night)]"
-              >
-                Open activation link
-              </a>
               <a
                 href={approvedCreds.loginUrl}
                 className="rounded-full border border-white/15 px-5 py-2.5 text-sm hover:border-[var(--gold)]"
