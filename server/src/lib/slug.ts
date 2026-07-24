@@ -61,11 +61,17 @@ export function generatePublicQrId() {
 export async function uniquePublicQrId() {
   for (let i = 0; i < 8; i += 1) {
     const id = generatePublicQrId();
-    const existing = await prisma.branch.findUnique({
-      where: { publicQrId: id },
-      select: { id: true },
-    });
-    if (!existing) return id;
+    const [onBranch, inHistory] = await Promise.all([
+      prisma.branch.findUnique({
+        where: { publicQrId: id },
+        select: { id: true },
+      }),
+      prisma.branchQrToken.findUnique({
+        where: { token: id },
+        select: { id: true },
+      }),
+    ]);
+    if (!onBranch && !inHistory) return id;
   }
   // Extremely unlikely collision path
   return createHash("sha256")

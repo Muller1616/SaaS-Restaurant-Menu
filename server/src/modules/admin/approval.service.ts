@@ -14,6 +14,7 @@ import {
 } from "../../services/email.js";
 import { notifyTenant } from "../../services/notify.js";
 import { generateBranchQr } from "../../services/qr.js";
+import { recordIssuedQrToken } from "../qr/branch-qr-token.js";
 import { recordSubscriptionEvent } from "../subscriptions/subscription-history.js";
 import { TRIAL_DAYS, addDays } from "../subscriptions/subscription.logic.js";
 
@@ -118,9 +119,17 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
           phone: tenant.phone,
           slug: branchSlug,
           publicQrId,
+          qrCreatedAt: now,
           isActive: true,
           isDefault: true,
         },
+      });
+
+      await recordIssuedQrToken(tx, {
+        token: publicQrId,
+        branchId: branch.id,
+        tenantId: tenant.id,
+        actor: { type: "ADMIN", id: adminId },
       });
 
       await tx.subscription.create({
@@ -162,6 +171,21 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
   await prisma.branch.update({
     where: { id: result.branch.id },
     data: { qrCodeUrl: qr.qrCodeUrl },
+  });
+
+  await logActivity({
+    userType: "ADMIN",
+    userId: adminId,
+    action: "CREATE",
+    entityType: "branch_qr",
+    entityId: result.branch.id,
+    summary: "QR code generated successfully",
+    details: {
+      publicQrId: result.branch.publicQrId,
+      menuUrl: qr.menuUrl,
+      branchName: result.branch.name,
+      tenantId: tenant.id,
+    },
   });
 
   const subscription = await prisma.subscription.findUnique({
