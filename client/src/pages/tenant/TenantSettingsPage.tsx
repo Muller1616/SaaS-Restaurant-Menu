@@ -32,6 +32,8 @@ export function TenantSettingsPage() {
   const query = useQuery({ queryKey: ["tenant", "settings"], queryFn: fetchSettings });
   const [enabled, setEnabled] = useState(true);
   const [phone, setPhone] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [businessLocation, setBusinessLocation] = useState("");
   const [description, setDescription] = useState("");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -42,6 +44,8 @@ export function TenantSettingsPage() {
     if (query.data) {
       setEnabled(query.data.emailNotificationsEnabled);
       setPhone(query.data.phone);
+      setBusinessName(query.data.businessName);
+      setBusinessLocation(query.data.businessLocation);
       setDescription(query.data.businessDescription ?? "");
     }
   }, [query.data]);
@@ -61,13 +65,21 @@ export function TenantSettingsPage() {
       const { data } = await api.patch<ApiSuccess<Settings>>("/tenant/settings", {
         emailNotificationsEnabled: enabled,
         phone,
+        businessName,
+        businessLocation,
         businessDescription: description || null,
       });
       return data.data;
     },
     onSuccess: async () => {
-      setNotice("Settings saved");
-      void queryClient.invalidateQueries({ queryKey: ["tenant", "settings"] });
+      setNotice("Settings saved. Public menus and admin views will show the updated restaurant name.");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["tenant", "settings"] }),
+        queryClient.invalidateQueries({ queryKey: ["tenant", "branches"] }),
+        queryClient.invalidateQueries({ queryKey: ["tenant", "dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin", "branches"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin", "tenants"] }),
+      ]);
       await refreshTenant();
     },
     onError: (err) =>
@@ -154,12 +166,32 @@ export function TenantSettingsPage() {
               Profile
             </h3>
             <dl className="mt-5 space-y-3 text-sm">
-              <Row label="Business" value={query.data.businessName} />
               <Row label="Owner" value={query.data.fullName} />
               <Row label="Email" value={query.data.email} />
-              <Row label="Location" value={query.data.businessLocation} />
               <Row label="Plan" value={query.data.selectedPlan.name} />
             </dl>
+
+            <label className="mt-6 block text-sm">
+              <span className="mb-1.5 block text-white">Restaurant / hotel name</span>
+              <input
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                className="w-full rounded-xl border border-[var(--line)] bg-black/25 px-3 py-2.5 text-white outline-none focus:border-[var(--gold)]"
+              />
+              <span className="mt-1 block text-xs text-[var(--muted)]">
+                Shown on public menus, QR printouts, and the admin panel.
+              </span>
+            </label>
+
+            <label className="mt-4 block text-sm">
+              <span className="mb-1.5 block text-white">Headquarters location</span>
+              <input
+                value={businessLocation}
+                onChange={(e) => setBusinessLocation(e.target.value)}
+                className="w-full rounded-xl border border-[var(--line)] bg-black/25 px-3 py-2.5 text-white outline-none focus:border-[var(--gold)]"
+              />
+            </label>
+
             <Link
               to={portal("change-password")}
               className="mt-6 inline-flex rounded-full border border-white/15 px-4 py-2 text-sm hover:border-[var(--gold)]"

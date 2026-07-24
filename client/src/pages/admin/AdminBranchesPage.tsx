@@ -13,12 +13,18 @@ type BranchRow = {
   id: string;
   name: string;
   location: string;
+  city: string | null;
+  region: string | null;
+  country: string | null;
+  displayLocation: string;
   phone: string | null;
+  managerName: string | null;
   slug: string;
   isActive: boolean;
   isDefault: boolean;
   deletedAt: string | null;
   createdAt: string;
+  updatedAt: string;
   itemCount: number;
   tenant: {
     id: string;
@@ -85,6 +91,8 @@ export function AdminBranchesPage() {
   const query = useQuery({
     queryKey: ["admin", "branches", status, q, includeDeleted, page],
     queryFn: () => fetchBranches({ status, q, includeDeleted, page }),
+    refetchOnWindowFocus: true,
+    staleTime: 15_000,
   });
 
   return (
@@ -175,13 +183,25 @@ export function AdminBranchesPage() {
                         default
                       </span>
                     )}
+                    {!row.isActive && !row.deletedAt && (
+                      <span className="ml-2 text-xs text-[var(--muted)]">
+                        inactive
+                      </span>
+                    )}
                     {row.deletedAt && (
                       <span className="ml-2 text-xs text-[var(--danger)]">
                         deleted
                       </span>
                     )}
                   </p>
-                  <p className="text-[var(--muted)]">{row.location}</p>
+                  <p className="text-[var(--muted)]">
+                    {row.displayLocation || row.location}
+                  </p>
+                  {row.managerName && (
+                    <p className="text-xs text-[var(--muted)]">
+                      Mgr: {row.managerName}
+                    </p>
+                  )}
                   <p className="text-xs text-[var(--muted)]">/{row.slug}</p>
                 </td>
                 <td className="px-4 py-3">

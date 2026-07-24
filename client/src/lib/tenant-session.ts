@@ -2,9 +2,14 @@ export type TenantBranch = {
   id: string;
   name: string;
   location: string;
+  city: string | null;
+  region: string | null;
+  country: string | null;
   phone: string | null;
+  managerName: string | null;
   slug: string;
   qrCodeUrl: string | null;
+  isActive: boolean;
   isDefault: boolean;
   subscription: {
     id: string;
