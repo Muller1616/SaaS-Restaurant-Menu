@@ -19,6 +19,7 @@ import {
   resolveUploadAbsolutePath,
 } from "../../services/qr.js";
 import { uniquePublicQrId } from "../../lib/slug.js";
+import { recordIssuedQrToken, rotateBranchPublicQrToken } from "./branch-qr-token.js";
 
 const hexColor = z
   .string()
@@ -174,6 +175,8 @@ export async function getBranchQr(tenantId: string, branchId: string) {
     menuUrl,
     qrCodeUrl: toPublicMediaUrl(qrCodeUrl ?? `/uploads/qr/${branch.id}.png`)!,
     qrSvgUrl: toPublicMediaUrl(qrSvgUrl)!,
+    qrCreatedAt: branch.qrCreatedAt,
+    qrRegeneratedAt: branch.qrRegeneratedAt,
     subscriptionStatus: branch.subscription?.status ?? null,
     canCustomize,
     hasLogo: Boolean(branch.tenant.logoUrl),
@@ -195,14 +198,21 @@ export async function getBranchQr(tenantId: string, branchId: string) {
 export async function regenerateBranchQr(tenantId: string, branchId: string) {
   const branch = await getBranchForTenant(tenantId, branchId);
   const previousPublicQrId = branch.publicQrId;
-  // Every regenerate issues a fresh opaque public QR identifier.
-  const generated = await writeQrForBranch(branch, { rotatePublicId: true });
+
+  const rotated = await rotateBranchPublicQrToken({
+    branchId: branch.id,
+    tenantId,
+    previousToken: previousPublicQrId,
+    actor: { type: "TENANT", id: tenantId },
+  });
+
+  const refreshed = await getBranchForTenant(tenantId, branchId);
+  const generated = await writeQrForBranch(refreshed);
 
   await prisma.branch.update({
     where: { id: branch.id },
     data: {
       qrCodeUrl: generated.qrCodeUrl,
-      publicQrId: generated.publicQrId,
     },
   });
 
@@ -212,10 +222,13 @@ export async function regenerateBranchQr(tenantId: string, branchId: string) {
     action: "UPDATE",
     entityType: "branch_qr",
     entityId: branch.id,
+    summary: "QR code regenerated successfully",
     details: {
       regenerated: true,
+      previousPublicQrId,
+      publicQrId: rotated.nextToken,
       menuUrl: generated.menuUrl,
-      publicQrId: generated.publicQrId,
+      rotatedAt: rotated.rotatedAt.toISOString(),
       fgColor: generated.fgColor,
       bgColor: generated.bgColor,
       usedLogo: generated.usedLogo,
