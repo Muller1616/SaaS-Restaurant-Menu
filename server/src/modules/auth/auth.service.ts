@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomInt } from "node:crypto";
 import { env } from "../../config/env.js";
 import { logActivity } from "../../lib/activity-log.js";
 import { signAccessToken } from "../../lib/jwt.js";
@@ -7,18 +7,241 @@ import { toPublicMediaUrl } from "../../lib/media-url.js";
 import { generateSecurePassword } from "../../lib/password.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error.js";
-import { accountApprovedEmail, sendEmail } from "../../services/email.js";
+import { accountApprovedEmail, adminPasswordOtpEmail, sendEmail } from "../../services/email.js";
 import { notifyTenant } from "../../services/notify.js";
 import { TRIAL_DAYS } from "../subscriptions/subscription.logic.js";
 import type {
   ActivateTenantInput,
   AdminLoginInput,
+  AdminResetPasswordInput,
+  AdminVerifyOtpInput,
   ChangePasswordInput,
   TenantLoginInput,
 } from "./auth.schemas.js";
 
 function hashToken(raw: string) {
   return createHash("sha256").update(raw).digest("hex");
+}
+
+const ADMIN_OTP_TTL_MS = 3 * 60 * 1000;
+const ADMIN_OTP_TTL_MINUTES = 3;
+const ADMIN_RESET_TOKEN_TTL_MS = 5 * 60 * 1000;
+const ADMIN_OTP_MAX_ATTEMPTS = 5;
+
+function generateAdminOtp() {
+  return String(randomInt(0, 1_000_000)).padStart(6, "0");
+}
+
+const GENERIC_ADMIN_OTP_MESSAGE =
+  "If that email is registered, a one-time code has been sent.";
+
+/**
+ * Enumeration-safe: always advances the client to OTP entry with a 3-minute window.
+ * OTP is only emailed when an admin account exists.
+ */
+export async function requestAdminPasswordOtp(email: string) {
+  const normalized = email.toLowerCase().trim();
+  const admin = await prisma.adminUser.findUnique({
+    where: { email: normalized },
+  });
+
+  const expiresInSeconds = Math.floor(ADMIN_OTP_TTL_MS / 1000);
+
+  if (!admin) {
+    return {
+      message: GENERIC_ADMIN_OTP_MESSAGE,
+      expiresInSeconds,
+    };
+  }
+
+  const rawOtp = generateAdminOtp();
+  const otpHash = hashToken(rawOtp);
+  const expiresAt = new Date(Date.now() + ADMIN_OTP_TTL_MS);
+
+  await prisma.$transaction([
+    prisma.adminPasswordOtp.updateMany({
+      where: {
+        adminId: admin.id,
+        usedAt: null,
+      },
+      data: { usedAt: new Date() },
+    }),
+    prisma.adminPasswordOtp.create({
+      data: {
+        adminId: admin.id,
+        otpHash,
+        expiresAt,
+      },
+    }),
+  ]);
+
+  const content = adminPasswordOtpEmail({
+    fullName: admin.name,
+    otp: rawOtp,
+    expiresInMinutes: ADMIN_OTP_TTL_MINUTES,
+  });
+
+  const mailed = await sendEmail({
+    to: admin.email,
+    subject: content.subject,
+    text: content.text,
+    html: content.html,
+  });
+
+  await logActivity({
+    userType: "ADMIN",
+    userId: admin.id,
+    action: "UPDATE",
+    entityType: "admin_password_otp",
+    entityId: admin.id,
+    summary: mailed.ok
+      ? "Admin password reset OTP emailed"
+      : "Admin password reset OTP created but email failed",
+    details: {
+      emailDelivered: mailed.ok,
+      expiresAt: expiresAt.toISOString(),
+    },
+  });
+
+  if (!mailed.ok) {
+    throw new AppError(
+      502,
+      "We could not send the reset code. Please try again shortly or contact support.",
+    );
+  }
+
+  return {
+    message: GENERIC_ADMIN_OTP_MESSAGE,
+    expiresInSeconds,
+  };
+}
+
+export async function verifyAdminPasswordOtp(input: AdminVerifyOtpInput) {
+  const email = input.email.toLowerCase().trim();
+  const otp = input.otp.trim();
+  const admin = await prisma.adminUser.findUnique({ where: { email } });
+
+  if (!admin) {
+    throw new AppError(400, "Invalid or expired code. Request a new one.");
+  }
+
+  const record = await prisma.adminPasswordOtp.findFirst({
+    where: {
+      adminId: admin.id,
+      usedAt: null,
+      verifiedAt: null,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!record || record.expiresAt.getTime() <= Date.now()) {
+    throw new AppError(400, "Invalid or expired code. Request a new one.");
+  }
+
+  if (record.attemptCount >= ADMIN_OTP_MAX_ATTEMPTS) {
+    await prisma.adminPasswordOtp.update({
+      where: { id: record.id },
+      data: { usedAt: new Date() },
+    });
+    throw new AppError(
+      429,
+      "Too many incorrect attempts. Please request a new code.",
+    );
+  }
+
+  const otpHash = hashToken(otp);
+  if (otpHash !== record.otpHash) {
+    await prisma.adminPasswordOtp.update({
+      where: { id: record.id },
+      data: { attemptCount: { increment: 1 } },
+    });
+    throw new AppError(400, "Invalid or expired code. Request a new one.");
+  }
+
+  const rawResetToken = randomBytes(32).toString("hex");
+  const resetTokenHash = hashToken(rawResetToken);
+  const resetExpiresAt = new Date(Date.now() + ADMIN_RESET_TOKEN_TTL_MS);
+
+  await prisma.adminPasswordOtp.update({
+    where: { id: record.id },
+    data: {
+      verifiedAt: new Date(),
+      resetTokenHash,
+      resetExpiresAt,
+    },
+  });
+
+  await logActivity({
+    userType: "ADMIN",
+    userId: admin.id,
+    action: "UPDATE",
+    entityType: "admin_password_otp",
+    entityId: record.id,
+    summary: "Admin password reset OTP verified",
+  });
+
+  return {
+    resetToken: rawResetToken,
+    expiresInSeconds: Math.floor(ADMIN_RESET_TOKEN_TTL_MS / 1000),
+    message: "Code verified. Choose a new password.",
+  };
+}
+
+export async function resetAdminPasswordWithToken(input: AdminResetPasswordInput) {
+  const resetTokenHash = hashToken(input.resetToken);
+  const record = await prisma.adminPasswordOtp.findFirst({
+    where: {
+      resetTokenHash,
+      usedAt: null,
+      verifiedAt: { not: null },
+      resetExpiresAt: { gt: new Date() },
+    },
+  });
+
+  if (!record) {
+    throw new AppError(
+      400,
+      "This reset session is invalid or has expired. Please start again.",
+    );
+  }
+
+  const passwordHash = await bcrypt.hash(input.newPassword, 10);
+
+  await prisma.$transaction([
+    prisma.adminUser.update({
+      where: { id: record.adminId },
+      data: { passwordHash },
+    }),
+    prisma.adminPasswordOtp.update({
+      where: { id: record.id },
+      data: {
+        usedAt: new Date(),
+        resetTokenHash: null,
+        resetExpiresAt: null,
+      },
+    }),
+    prisma.adminPasswordOtp.updateMany({
+      where: {
+        adminId: record.adminId,
+        usedAt: null,
+        id: { not: record.id },
+      },
+      data: { usedAt: new Date() },
+    }),
+  ]);
+
+  await logActivity({
+    userType: "ADMIN",
+    userId: record.adminId,
+    action: "UPDATE",
+    entityType: "admin_user",
+    entityId: record.adminId,
+    summary: "Admin password reset via OTP",
+  });
+
+  return {
+    message: "Password updated. You can sign in with your new password.",
+  };
 }
 
 function serializeBranch(branch: {

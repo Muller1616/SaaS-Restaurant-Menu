@@ -178,6 +178,43 @@ function escapeHtml(value: string) {
     .replaceAll('"', "&quot;");
 }
 
+export function adminPasswordOtpEmail(input: {
+  fullName: string;
+  otp: string;
+  expiresInMinutes: number;
+}) {
+  const subject = "Your KitchenOS admin password reset code";
+  const text = `Hi ${input.fullName},
+
+Your one-time password (OTP) for resetting your KitchenOS admin password is:
+
+${input.otp}
+
+This code expires in ${input.expiresInMinutes} minutes and can be used only once.
+
+If you did not request a password reset, ignore this email. Your password will remain unchanged.
+
+KitchenOS Team`;
+
+  const html = `
+  <div style="font-family:Manrope,Arial,sans-serif;background:#070a09;color:#eef2ef;padding:32px">
+    <div style="max-width:560px;margin:0 auto;background:#121a17;border:1px solid rgba(232,196,154,0.18);border-radius:24px;padding:28px">
+      <p style="letter-spacing:0.28em;text-transform:uppercase;color:#d4a574;font-size:12px;margin:0">KitchenOS</p>
+      <h1 style="font-family:Georgia,serif;font-size:32px;margin:12px 0 8px;color:#fff">Password reset code</h1>
+      <p style="color:rgba(238,242,239,0.72);line-height:1.6">Hi ${escapeHtml(input.fullName)}, use this one-time code to reset your admin password.</p>
+      <div style="margin:24px 0;padding:20px;border-radius:16px;background:rgba(0,0,0,0.28);border:1px solid rgba(232,196,154,0.18);text-align:center">
+        <p style="margin:0 0 8px;color:rgba(238,242,239,0.55);font-size:12px;letter-spacing:0.2em;text-transform:uppercase">One-time password</p>
+        <p style="margin:0;font-size:36px;font-weight:700;letter-spacing:0.35em;color:#d4a574">${escapeHtml(input.otp)}</p>
+      </div>
+      <p style="color:rgba(238,242,239,0.72);line-height:1.6">This code expires in <strong style="color:#fff">${input.expiresInMinutes} minutes</strong> and can be used only once.</p>
+      <p style="margin:0 0 12px;color:rgba(238,242,239,0.55);font-size:13px">If you did not request this, ignore this email. Your password will not change.</p>
+      <p style="margin:0;color:rgba(238,242,239,0.45);font-size:12px;line-height:1.5">Need help? Reply to this message or contact your KitchenOS platform administrator.</p>
+    </div>
+  </div>`;
+
+  return { subject, text, html };
+}
+
 export function accountRejectedEmail(input: {
   fullName: string;
   businessName: string;

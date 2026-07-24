@@ -36,6 +36,30 @@ export const resetPasswordSchema = z.object({
     .min(8, "New password must be at least 8 characters"),
 });
 
+export const adminVerifyOtpSchema = z.object({
+  email: z.email("Valid email is required"),
+  otp: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, "Enter the 6-digit code from your email"),
+});
+
+export const adminResetPasswordSchema = z
+  .object({
+    resetToken: z.string().min(1, "Reset session is required"),
+    newPassword: z
+      .string()
+      .min(8, "New password must be at least 8 characters"),
+    confirmPassword: z.string().min(8, "Confirm your password"),
+  })
+  .refine((values) => values.newPassword === values.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+export type AdminVerifyOtpInput = z.infer<typeof adminVerifyOtpSchema>;
+export type AdminResetPasswordInput = z.infer<typeof adminResetPasswordSchema>;
+
 export const previewActivationSchema = z.object({
   slug: z.string().min(1),
   token: z.string().min(1),

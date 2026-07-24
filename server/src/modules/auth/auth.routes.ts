@@ -11,6 +11,8 @@ import { AppError } from "../../middleware/error.js";
 import {
   adminLoginSchema,
   activateTenantSchema,
+  adminResetPasswordSchema,
+  adminVerifyOtpSchema,
   changePasswordSchema,
   forgotPasswordSchema,
   previewActivationSchema,
@@ -28,9 +30,12 @@ import {
   logoutAdmin,
   logoutTenant,
   previewTenantActivation,
+  requestAdminPasswordOtp,
   requestTenantActivationEmail,
   requestTenantPasswordReset,
+  resetAdminPasswordWithToken,
   resetTenantPassword,
+  verifyAdminPasswordOtp,
 } from "./auth.service.js";
 
 export const authRouter = Router();
@@ -103,6 +108,66 @@ authRouter.post(
     try {
       await logoutAdmin(req.user!.sub);
       res.json({ success: true, data: { loggedOut: true } });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+const adminOtpLimiter = createAuthLimiter(
+  "Too many password reset attempts. Try again in 15 minutes.",
+  8,
+);
+const adminOtpVerifyLimiter = createAuthLimiter(
+  "Too many verification attempts. Try again in 15 minutes.",
+  20,
+);
+
+authRouter.post(
+  "/admin/forgot-password",
+  adminOtpLimiter,
+  async (req, res, next) => {
+    try {
+      const parsed = forgotPasswordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
+      }
+      const data = await requestAdminPasswordOtp(parsed.data.email);
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+authRouter.post(
+  "/admin/verify-otp",
+  adminOtpVerifyLimiter,
+  async (req, res, next) => {
+    try {
+      const parsed = adminVerifyOtpSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
+      }
+      const data = await verifyAdminPasswordOtp(parsed.data);
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+authRouter.post(
+  "/admin/reset-password",
+  adminOtpLimiter,
+  async (req, res, next) => {
+    try {
+      const parsed = adminResetPasswordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
+      }
+      const data = await resetAdminPasswordWithToken(parsed.data);
+      res.json({ success: true, data });
     } catch (error) {
       next(error);
     }
