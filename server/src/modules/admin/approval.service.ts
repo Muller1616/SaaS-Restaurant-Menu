@@ -14,7 +14,7 @@ import {
 } from "../../services/email.js";
 import { notifyTenant } from "../../services/notify.js";
 import { generateBranchQr } from "../../services/qr.js";
-import { recordIssuedQrToken } from "../qr/branch-qr-token.js";
+import { recordIssuedQrToken, revokeBranchQrTokens } from "../qr/branch-qr-token.js";
 import { recordSubscriptionEvent } from "../subscriptions/subscription-history.js";
 import { TRIAL_DAYS, addDays } from "../subscriptions/subscription.logic.js";
 
@@ -241,6 +241,63 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
     },
   });
 
+  if (!notifyResult.emailed) {
+    // Option A: do not leave an ACTIVE tenant without delivered credentials.
+    await prisma.$transaction(async (tx) => {
+      await tx.tenant.update({
+        where: { id: tenant.id },
+        data: {
+          status: "PENDING_APPROVAL",
+          passwordHash: null,
+          mustChangePassword: false,
+          activatedAt: null,
+        },
+      });
+      await tx.branch.update({
+        where: { id: result.branch.id },
+        data: {
+          deletedAt: new Date(),
+          isActive: false,
+          isDefault: false,
+        },
+      });
+      await tx.subscription.updateMany({
+        where: { branchId: result.branch.id },
+        data: { status: "CANCELLED" },
+      });
+      if (pendingPayment) {
+        await tx.payment.update({
+          where: { id: pendingPayment.id },
+          data: {
+            status: "PENDING",
+            approvedById: null,
+            branchId: null,
+            adminNotes: null,
+          },
+        });
+      }
+      await tx.activationToken.updateMany({
+        where: { tenantId: tenant.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+    });
+    await revokeBranchQrTokens(result.branch.id);
+    await logActivity({
+      userType: "ADMIN",
+      userId: adminId,
+      action: "UPDATE",
+      entityType: "tenant",
+      entityId: tenant.id,
+      summary: "Approval rolled back — activation email failed",
+      details: { emailDelivered: false },
+    });
+    throw new AppError(
+      502,
+      "Activation email could not be sent. Approval was not completed. Fix SMTP and try again.",
+      { code: "ACTIVATION_EMAIL_FAILED" },
+    );
+  }
+
   await logActivity({
     userType: "ADMIN",
     userId: adminId,
@@ -251,7 +308,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
       businessName: tenant.businessName,
       plan: tenant.selectedPlan.slug,
       branchId: result.branch.id,
-      emailDelivered: notifyResult.emailed,
+      emailDelivered: true,
       activationIssued: true,
     },
   });
@@ -270,11 +327,10 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
       menuUrl: qr.menuUrl,
     },
     portalUrl: `/r/${tenant.slug}/dashboard`,
-    // One-time reveal for the approving admin UI (also emailed). Never logged.
-    temporaryPassword: plainPassword,
-    activationUrl,
     loginUrl,
-    emailDelivered: notifyResult.emailed,
+    emailDelivered: true as const,
+    message:
+      "Activation email sent. The restaurant owner must use the link and temporary password in that email.",
     publicMenuUrl: qr.menuUrl,
   };
 }
@@ -307,6 +363,7 @@ export async function resendActivation(tenantId: string, adminId: string) {
 
   const plainPassword = generateSecurePassword(12);
   const passwordHash = await bcrypt.hash(plainPassword, 10);
+  const previousHash = tenant.passwordHash;
 
   await prisma.tenant.update({
     where: { id: tenant.id },
@@ -348,6 +405,22 @@ export async function resendActivation(tenantId: string, adminId: string) {
     },
   });
 
+  if (!notifyResult.emailed) {
+    await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { passwordHash: previousHash },
+    });
+    await prisma.activationToken.updateMany({
+      where: { tenantId: tenant.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    throw new AppError(
+      502,
+      "Activation email could not be sent. The previous temporary password was preserved. Fix SMTP and try again.",
+      { code: "ACTIVATION_EMAIL_FAILED" },
+    );
+  }
+
   await logActivity({
     userType: "ADMIN",
     userId: adminId,
@@ -356,7 +429,7 @@ export async function resendActivation(tenantId: string, adminId: string) {
     entityId: tenant.id,
     details: {
       field: "activation_resend",
-      emailDelivered: notifyResult.emailed,
+      emailDelivered: true,
     },
   });
 
@@ -364,10 +437,10 @@ export async function resendActivation(tenantId: string, adminId: string) {
     id: tenant.id,
     email: tenant.email,
     businessName: tenant.businessName,
-    temporaryPassword: plainPassword,
-    activationUrl,
     loginUrl,
-    emailDelivered: notifyResult.emailed,
+    emailDelivered: true as const,
+    message:
+      "A new activation email was sent. The temporary password is only in that email.",
   };
 }
 

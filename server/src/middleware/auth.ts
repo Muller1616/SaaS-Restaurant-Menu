@@ -1,12 +1,13 @@
 import type { NextFunction, Request, Response } from "express";
-import { AppError } from "./error.js";
+import { prisma } from "../lib/prisma.js";
 import { verifyAccessToken, type AccessTokenPayload } from "../lib/jwt.js";
+import { AppError } from "./error.js";
 
 export type AuthedRequest = Request & {
   user?: AccessTokenPayload;
 };
 
-export function requireAuth(
+export async function requireAuth(
   req: AuthedRequest,
   _res: Response,
   next: NextFunction,
@@ -18,7 +19,39 @@ export function requireAuth(
 
   try {
     const token = header.slice("Bearer ".length).trim();
-    req.user = verifyAccessToken(token);
+    const payload = verifyAccessToken(token);
+
+    if (payload.role === "ADMIN") {
+      const admin = await prisma.adminUser.findUnique({
+        where: { id: payload.sub },
+        select: { tokenVersion: true, role: true },
+      });
+      if (!admin || admin.tokenVersion !== payload.tokenVersion) {
+        return next(
+          new AppError(401, "Session has ended. Please sign in again.", {
+            code: "TOKEN_REVOKED",
+          }),
+        );
+      }
+      // Prefer live DB role over stale JWT claim (demotion/promotion).
+      payload.adminRole = admin.role;
+    } else if (payload.role === "TENANT") {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: payload.sub },
+        select: { tokenVersion: true },
+      });
+      if (!tenant || tenant.tokenVersion !== payload.tokenVersion) {
+        return next(
+          new AppError(401, "Session has ended. Please sign in again.", {
+            code: "TOKEN_REVOKED",
+          }),
+        );
+      }
+    } else {
+      return next(new AppError(401, "Invalid or expired token"));
+    }
+
+    req.user = payload;
     return next();
   } catch {
     return next(new AppError(401, "Invalid or expired token"));
