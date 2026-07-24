@@ -81,7 +81,7 @@ async function main() {
     });
   }
 
-  const adminEmail = process.env.ADMIN_EMAIL ?? "admin@kitchenos.local";
+  const adminEmail = process.env.ADMIN_EMAIL ?? "simbatechtradingplc@gmail.com";
   const adminPassword = process.env.ADMIN_PASSWORD;
   if (!adminPassword) {
     if (isProduction) {
@@ -92,20 +92,48 @@ async function main() {
   const adminName = process.env.ADMIN_NAME ?? "KitchenOS Admin";
   const passwordHash = await bcrypt.hash(resolvedAdminPassword, 10);
 
-  await prisma.adminUser.upsert({
-    where: { email: adminEmail },
-    update: {
-      name: adminName,
-      passwordHash,
-      role: "SUPER_ADMIN",
-    },
-    create: {
-      name: adminName,
-      email: adminEmail,
-      passwordHash,
-      role: "SUPER_ADMIN",
-    },
-  });
+  // Keep a single super-admin aligned with ADMIN_* from .env (migrate email if it changed).
+  const envAdmin = await prisma.adminUser.findUnique({ where: { email: adminEmail } });
+  const legacyAdmin =
+    adminEmail !== "admin@kitchenos.local"
+      ? await prisma.adminUser.findUnique({
+          where: { email: "admin@kitchenos.local" },
+        })
+      : null;
+
+  if (envAdmin) {
+    await prisma.adminUser.update({
+      where: { id: envAdmin.id },
+      data: {
+        name: adminName,
+        passwordHash,
+        role: "SUPER_ADMIN",
+      },
+    });
+    if (legacyAdmin && legacyAdmin.id !== envAdmin.id) {
+      await prisma.adminPasswordOtp.deleteMany({ where: { adminId: legacyAdmin.id } });
+      await prisma.adminUser.delete({ where: { id: legacyAdmin.id } });
+    }
+  } else if (legacyAdmin) {
+    await prisma.adminUser.update({
+      where: { id: legacyAdmin.id },
+      data: {
+        email: adminEmail,
+        name: adminName,
+        passwordHash,
+        role: "SUPER_ADMIN",
+      },
+    });
+  } else {
+    await prisma.adminUser.create({
+      data: {
+        name: adminName,
+        email: adminEmail,
+        passwordHash,
+        role: "SUPER_ADMIN",
+      },
+    });
+  }
 
   const staffEmail =
     process.env.STAFF_ADMIN_EMAIL ?? "staff@kitchenos.local";
@@ -140,7 +168,7 @@ async function main() {
   console.log(`Staff admin email:  ${staffEmail}`);
   if (!isProduction) {
     console.log(
-      "Dev note: default passwords apply only when ADMIN_PASSWORD / STAFF_ADMIN_PASSWORD are unset — never log them.",
+      "Dev note: passwords are taken from ADMIN_PASSWORD / STAFF_ADMIN_PASSWORD in .env (defaults only if unset).",
     );
   }
 }

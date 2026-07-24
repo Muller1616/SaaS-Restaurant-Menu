@@ -114,9 +114,30 @@ model AdminUser {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  approvedPayments Payment[] @relation("PaymentApprovedBy")
+  approvedPayments Payment[]         @relation("PaymentApprovedBy")
+  passwordOtps     AdminPasswordOtp[]
 
   @@map("admin_users")
+}
+
+/// Single-use, time-limited OTP for admin password recovery (hashed at rest).
+model AdminPasswordOtp {
+  id             String    @id @default(cuid())
+  adminId        String    @map("admin_id")
+  otpHash        String    @map("otp_hash")
+  expiresAt      DateTime  @map("expires_at")
+  usedAt         DateTime? @map("used_at")
+  verifiedAt     DateTime? @map("verified_at")
+  attemptCount   Int       @default(0) @map("attempt_count")
+  /// Issued after successful OTP verification — one-time password-change credential.
+  resetTokenHash String?   @unique @map("reset_token_hash")
+  resetExpiresAt DateTime? @map("reset_expires_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId, createdAt])
+  @@map("admin_password_otps")
 }
 
 model Tenant {
