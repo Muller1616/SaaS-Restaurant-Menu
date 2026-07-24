@@ -8,8 +8,12 @@ import { AppError } from "../../middleware/error.js";
 import { requirePasswordChanged } from "../../middleware/require-password-changed.js";
 import {
   branchInputSchema,
+  branchStatusSchema,
   createBranch,
+  getBranch,
   listBranches,
+  restoreBranch,
+  setBranchActive,
   softDeleteBranch,
   updateBranch,
 } from "./branch.service.js";
@@ -20,7 +24,19 @@ branchRouter.use(requireAuth, requireTenant, requirePasswordChanged);
 
 branchRouter.get("/", async (req: AuthedRequest, res, next) => {
   try {
-    const data = await listBranches(req.user!.sub);
+    const includeDeleted =
+      req.query.includeDeleted === "1" ||
+      req.query.includeDeleted === "true";
+    const data = await listBranches(req.user!.sub, { includeDeleted });
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+branchRouter.get("/:id", async (req: AuthedRequest, res, next) => {
+  try {
+    const data = await getBranch(req.user!.sub, String(req.params.id));
     res.json({ success: true, data });
   } catch (error) {
     next(error);
@@ -51,6 +67,32 @@ branchRouter.patch("/:id", async (req: AuthedRequest, res, next) => {
       String(req.params.id),
       parsed.data,
     );
+    res.json({ success: true, data: branch });
+  } catch (error) {
+    next(error);
+  }
+});
+
+branchRouter.patch("/:id/status", async (req: AuthedRequest, res, next) => {
+  try {
+    const parsed = branchStatusSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
+    }
+    const branch = await setBranchActive(
+      req.user!.sub,
+      String(req.params.id),
+      parsed.data.isActive,
+    );
+    res.json({ success: true, data: branch });
+  } catch (error) {
+    next(error);
+  }
+});
+
+branchRouter.post("/:id/restore", async (req: AuthedRequest, res, next) => {
+  try {
+    const branch = await restoreBranch(req.user!.sub, String(req.params.id));
     res.json({ success: true, data: branch });
   } catch (error) {
     next(error);
