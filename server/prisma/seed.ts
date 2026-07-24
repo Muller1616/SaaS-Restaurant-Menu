@@ -62,10 +62,7 @@ const plans: Array<{
   },
 ];
 
-async function main() {
-  const isProduction = process.env.NODE_ENV === "production";
-  console.log("Seeding KitchenOS database...");
-
+async function seedPlans() {
   for (const plan of plans) {
     await prisma.plan.upsert({
       where: { slug: plan.slug },
@@ -80,97 +77,144 @@ async function main() {
       create: plan,
     });
   }
+}
 
-  const adminEmail = process.env.ADMIN_EMAIL ?? "simbatechtradingplc@gmail.com";
-  const adminPassword = process.env.ADMIN_PASSWORD;
-  if (!adminPassword) {
-    if (isProduction) {
-      throw new Error("ADMIN_PASSWORD is required when seeding in production");
-    }
+/**
+ * Bootstrap / update platform admins from env.
+ * Production: refuses unless ALLOW_PROD_SEED=1 and all credentials are explicit.
+ * Never resets an existing admin password unless SEED_RESET_ADMIN_PASSWORDS=1.
+ */
+async function seedAdmins(isProduction: boolean) {
+  if (isProduction && process.env.ALLOW_PROD_SEED !== "1") {
+    console.log(
+      "Skipping admin seed in production (set ALLOW_PROD_SEED=1 to bootstrap explicitly).",
+    );
+    return;
   }
-  const resolvedAdminPassword = adminPassword ?? "Admin@12345";
+
+  const adminEmail = (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
+  const adminPassword = process.env.ADMIN_PASSWORD;
   const adminName = process.env.ADMIN_NAME ?? "KitchenOS Admin";
-  const passwordHash = await bcrypt.hash(resolvedAdminPassword, 10);
 
-  // Keep a single super-admin aligned with ADMIN_* from .env (migrate email if it changed).
-  const envAdmin = await prisma.adminUser.findUnique({ where: { email: adminEmail } });
-  const legacyAdmin =
-    adminEmail !== "admin@kitchenos.local"
-      ? await prisma.adminUser.findUnique({
-          where: { email: "admin@kitchenos.local" },
-        })
-      : null;
-
-  if (envAdmin) {
-    await prisma.adminUser.update({
-      where: { id: envAdmin.id },
-      data: {
-        name: adminName,
-        passwordHash,
-        role: "SUPER_ADMIN",
-      },
-    });
-    if (legacyAdmin && legacyAdmin.id !== envAdmin.id) {
-      await prisma.adminPasswordOtp.deleteMany({ where: { adminId: legacyAdmin.id } });
-      await prisma.adminUser.delete({ where: { id: legacyAdmin.id } });
+  if (!adminEmail || !adminPassword) {
+    if (isProduction) {
+      throw new Error(
+        "ADMIN_EMAIL and ADMIN_PASSWORD are required when ALLOW_PROD_SEED=1",
+      );
     }
-  } else if (legacyAdmin) {
+    console.log(
+      "Skipping super-admin seed (set ADMIN_EMAIL and ADMIN_PASSWORD in .env).",
+    );
+  } else {
+    const resetPasswords = process.env.SEED_RESET_ADMIN_PASSWORDS === "1";
+    const passwordHash = await bcrypt.hash(adminPassword, 12);
+    const envAdmin = await prisma.adminUser.findUnique({
+      where: { email: adminEmail },
+    });
+    const legacyAdmin =
+      adminEmail !== "admin@kitchenos.local"
+        ? await prisma.adminUser.findUnique({
+            where: { email: "admin@kitchenos.local" },
+          })
+        : null;
+
+    if (envAdmin) {
+      await prisma.adminUser.update({
+        where: { id: envAdmin.id },
+        data: {
+          name: adminName,
+          role: "SUPER_ADMIN",
+          ...(resetPasswords || !envAdmin.passwordHash
+            ? { passwordHash }
+            : {}),
+        },
+      });
+      if (legacyAdmin && legacyAdmin.id !== envAdmin.id) {
+        await prisma.adminPasswordOtp.deleteMany({
+          where: { adminId: legacyAdmin.id },
+        });
+        await prisma.adminUser.delete({ where: { id: legacyAdmin.id } });
+      }
+    } else if (legacyAdmin) {
+      await prisma.adminUser.update({
+        where: { id: legacyAdmin.id },
+        data: {
+          email: adminEmail,
+          name: adminName,
+          role: "SUPER_ADMIN",
+          ...(resetPasswords ? { passwordHash } : {}),
+          ...(!legacyAdmin.passwordHash ? { passwordHash } : {}),
+        },
+      });
+    } else {
+      await prisma.adminUser.create({
+        data: {
+          name: adminName,
+          email: adminEmail,
+          passwordHash,
+          role: "SUPER_ADMIN",
+        },
+      });
+    }
+    console.log(`Super admin ready: ${adminEmail}`);
+  }
+
+  const staffEmail = (process.env.STAFF_ADMIN_EMAIL ?? "").trim().toLowerCase();
+  const staffPassword = process.env.STAFF_ADMIN_PASSWORD;
+  const staffName = process.env.STAFF_ADMIN_NAME ?? "KitchenOS Staff";
+
+  if (!staffEmail || !staffPassword) {
+    if (isProduction) {
+      throw new Error(
+        "STAFF_ADMIN_EMAIL and STAFF_ADMIN_PASSWORD are required when ALLOW_PROD_SEED=1",
+      );
+    }
+    console.log(
+      "Skipping staff-admin seed (set STAFF_ADMIN_EMAIL and STAFF_ADMIN_PASSWORD to create one).",
+    );
+    return;
+  }
+
+  const resetPasswords = process.env.SEED_RESET_ADMIN_PASSWORDS === "1";
+  const staffHash = await bcrypt.hash(staffPassword, 12);
+  const existingStaff = await prisma.adminUser.findUnique({
+    where: { email: staffEmail },
+  });
+
+  if (existingStaff) {
     await prisma.adminUser.update({
-      where: { id: legacyAdmin.id },
+      where: { id: existingStaff.id },
       data: {
-        email: adminEmail,
-        name: adminName,
-        passwordHash,
-        role: "SUPER_ADMIN",
+        name: staffName,
+        role: "ADMIN",
+        ...(resetPasswords || !existingStaff.passwordHash
+          ? { passwordHash: staffHash }
+          : {}),
       },
     });
   } else {
     await prisma.adminUser.create({
       data: {
-        name: adminName,
-        email: adminEmail,
-        passwordHash,
-        role: "SUPER_ADMIN",
+        name: staffName,
+        email: staffEmail,
+        passwordHash: staffHash,
+        role: "ADMIN",
       },
     });
   }
+  console.log(`Staff admin ready: ${staffEmail}`);
+}
 
-  const staffEmail =
-    process.env.STAFF_ADMIN_EMAIL ?? "staff@kitchenos.local";
-  const staffPasswordEnv = process.env.STAFF_ADMIN_PASSWORD;
-  if (!staffPasswordEnv && isProduction) {
-    throw new Error("STAFF_ADMIN_PASSWORD is required when seeding in production");
-  }
-  const staffPassword = staffPasswordEnv ?? "Staff@12345";
-  const staffName = process.env.STAFF_ADMIN_NAME ?? "KitchenOS Staff";
-  const staffHash = await bcrypt.hash(staffPassword, 10);
+async function main() {
+  const isProduction = process.env.NODE_ENV === "production";
+  console.log("Seeding KitchenOS database...");
 
-  await prisma.adminUser.upsert({
-    where: { email: staffEmail },
-    update: {
-      name: staffName,
-      passwordHash: staffHash,
-      role: "ADMIN",
-    },
-    create: {
-      name: staffName,
-      email: staffEmail,
-      passwordHash: staffHash,
-      role: "ADMIN",
-    },
-  });
+  await seedPlans();
+  await seedAdmins(isProduction);
 
   const planCount = await prisma.plan.count();
   const adminCount = await prisma.adminUser.count();
-
   console.log(`Seed complete: ${planCount} plans, ${adminCount} admin user(s).`);
-  console.log(`Super admin email: ${adminEmail}`);
-  console.log(`Staff admin email:  ${staffEmail}`);
-  if (!isProduction) {
-    console.log(
-      "Dev note: passwords are taken from ADMIN_PASSWORD / STAFF_ADMIN_PASSWORD in .env (defaults only if unset).",
-    );
-  }
 }
 
 main()

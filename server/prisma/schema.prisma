@@ -111,6 +111,8 @@ model AdminUser {
   email        String    @unique
   passwordHash String    @map("password_hash")
   role         AdminRole @default(ADMIN)
+  /// Incremented on logout / password change — invalidates all outstanding JWTs.
+  tokenVersion Int       @default(0) @map("token_version")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
@@ -160,6 +162,8 @@ model Tenant {
   mustChangePassword        Boolean      @default(false) @map("must_change_password")
   /// Set when the owner completes activation (password set via secure link).
   activatedAt               DateTime?    @map("activated_at")
+  /// Incremented on logout / password change — invalidates all outstanding JWTs.
+  tokenVersion              Int          @default(0) @map("token_version")
   createdAt                 DateTime     @default(now()) @map("created_at")
   updatedAt                 DateTime     @updatedAt @map("updated_at")
 
@@ -172,6 +176,7 @@ model Tenant {
   menuViews         MenuView[]
 
   @@index([status])
+  @@index([createdAt])
   @@map("tenants")
 }
 
@@ -281,6 +286,7 @@ model Subscription {
   @@index([status])
   @@index([expiryDate])
   @@index([cancelledAt])
+  @@index([status, expiryDate])
   @@map("subscriptions")
 }
 
@@ -344,6 +350,7 @@ model Payment {
 
   @@index([status])
   @@index([tenantId])
+  @@index([createdAt])
   @@map("payments")
 }
 
