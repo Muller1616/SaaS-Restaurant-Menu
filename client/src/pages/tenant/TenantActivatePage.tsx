@@ -6,13 +6,15 @@ import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { z } from "zod";
 import { BackButton } from "../../components/BackButton";
+import { PasswordRequirements } from "../../components/PasswordRequirements";
 import { api, type ApiSuccess } from "../../lib/api";
+import { strongPasswordSchema } from "../../lib/password-policy";
 
 const schema = z
   .object({
     temporaryPassword: z.string().min(1, "Temporary password is required"),
-    newPassword: z.string().min(8, "At least 8 characters"),
-    confirmPassword: z.string().min(8, "Confirm your password"),
+    newPassword: strongPasswordSchema(),
+    confirmPassword: z.string().min(1, "Confirm your password"),
   })
   .refine((values) => values.newPassword === values.confirmPassword, {
     message: "Passwords do not match",
@@ -66,11 +68,20 @@ export function TenantActivatePage() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
     setError,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
+    defaultValues: {
+      temporaryPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    },
   });
+
+  const newPassword = watch("newPassword");
+  const confirmPassword = watch("confirmPassword");
 
   async function onSubmit(values: FormValues) {
     try {
@@ -208,6 +219,11 @@ export function TenantActivatePage() {
                   autoComplete="new-password"
                   className="w-full rounded-xl border border-[var(--line)] bg-black/30 px-3 py-2.5 text-white outline-none focus:border-[var(--gold)]"
                   {...register("newPassword")}
+                />
+                <PasswordRequirements
+                  password={newPassword ?? ""}
+                  confirmPassword={confirmPassword}
+                  showConfirmMatch
                 />
                 {errors.newPassword && (
                   <p className="mt-1 text-sm text-[var(--danger)]">
