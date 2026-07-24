@@ -82,6 +82,11 @@ enum SubscriptionEventKind {
   RETENTION_PURGED
 }
 
+enum BranchQrTokenStatus {
+  ACTIVE
+  REVOKED
+}
+
 model Plan {
   id           String   @id @default(cuid())
   name         String   @unique
@@ -159,6 +164,10 @@ model Branch {
   /// Opaque public QR route id → `/r/{publicQrId}` (never the tenant slug).
   publicQrId String    @unique @map("public_qr_id")
   qrCodeUrl  String?   @map("qr_code_url")
+  /// When the current active QR token was first issued.
+  qrCreatedAt DateTime @default(now()) @map("qr_created_at")
+  /// When the QR token was last rotated (null until first regenerate).
+  qrRegeneratedAt DateTime? @map("qr_regenerated_at")
   /// Custom QR foreground (modules) — Basic+ only at runtime.
   qrFgColor  String?   @map("qr_fg_color")
   /// Custom QR background — Basic+ only at runtime.
@@ -178,10 +187,31 @@ model Branch {
   payments            Payment[]
   subscriptionEvents  SubscriptionEvent[]
   menuViews           MenuView[]
+  qrTokens            BranchQrToken[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, deletedAt])
   @@map("branches")
+}
+
+/// Full history of opaque QR tokens per branch (active + revoked).
+/// Public resolution uses Branch.publicQrId; revoked tokens never resolve.
+model BranchQrToken {
+  id            String              @id @default(cuid())
+  token         String              @unique
+  branchId      String              @map("branch_id")
+  tenantId      String              @map("tenant_id")
+  status        BranchQrTokenStatus @default(ACTIVE)
+  createdAt     DateTime            @default(now()) @map("created_at")
+  revokedAt     DateTime?           @map("revoked_at")
+  createdByType ActivityUserType?   @map("created_by_type")
+  createdById   String?             @map("created_by_id")
+
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([branchId, status])
+  @@index([tenantId])
+  @@map("branch_qr_tokens")
 }
 
 /// Public menu page views for Basic/Full analytics (plan feature).
