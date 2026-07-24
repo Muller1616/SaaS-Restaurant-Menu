@@ -5,6 +5,7 @@ import { logActivity } from "../../lib/activity-log.js";
 import { signAccessToken } from "../../lib/jwt.js";
 import { toPublicMediaUrl } from "../../lib/media-url.js";
 import { generateSecurePassword } from "../../lib/password.js";
+import { passwordPolicyErrorMessage } from "../../lib/password-policy.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error.js";
 import { accountApprovedEmail, adminPasswordOtpEmail, sendEmail } from "../../services/email.js";
@@ -18,6 +19,13 @@ import type {
   ChangePasswordInput,
   TenantLoginInput,
 } from "./auth.schemas.js";
+
+function requireStrongPassword(password: string) {
+  const message = passwordPolicyErrorMessage(password);
+  if (message) {
+    throw new AppError(400, message);
+  }
+}
 
 function hashToken(raw: string) {
   return createHash("sha256").update(raw).digest("hex");
@@ -205,6 +213,7 @@ export async function resetAdminPasswordWithToken(input: AdminResetPasswordInput
     );
   }
 
+  requireStrongPassword(input.newPassword);
   const passwordHash = await bcrypt.hash(input.newPassword, 10);
 
   await prisma.$transaction([
@@ -545,6 +554,7 @@ export async function changeTenantPassword(
     throw new AppError(400, "Current password is incorrect");
   }
 
+  requireStrongPassword(input.newPassword);
   const passwordHash = await bcrypt.hash(input.newPassword, 10);
   await prisma.tenant.update({
     where: { id: tenantId },
@@ -648,6 +658,7 @@ export async function activateTenantAccount(input: ActivateTenantInput) {
     );
   }
 
+  requireStrongPassword(input.newPassword);
   const passwordHash = await bcrypt.hash(input.newPassword, 10);
   const activatedAt = new Date();
 
@@ -854,6 +865,7 @@ export async function resetTenantPassword(token: string, newPassword: string) {
     throw new AppError(400, "This password reset link is invalid or has expired. Please request a new one.");
   }
 
+  requireStrongPassword(newPassword);
   const passwordHash = await bcrypt.hash(newPassword, 10);
 
   await prisma.$transaction([

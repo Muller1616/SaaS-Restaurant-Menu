@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { strongPasswordSchema } from "../../lib/password-policy.js";
 
 export const adminLoginSchema = z.object({
   email: z.email("Valid email is required"),
@@ -18,9 +19,7 @@ export type TenantLoginInput = z.infer<typeof tenantLoginSchema>;
 
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
-  newPassword: z
-    .string()
-    .min(8, "New password must be at least 8 characters"),
+  newPassword: strongPasswordSchema(),
 });
 
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
@@ -31,9 +30,7 @@ export const forgotPasswordSchema = z.object({
 
 export const resetPasswordSchema = z.object({
   token: z.string().min(1),
-  newPassword: z
-    .string()
-    .min(8, "New password must be at least 8 characters"),
+  newPassword: strongPasswordSchema(),
 });
 
 export const adminVerifyOtpSchema = z.object({
@@ -47,10 +44,8 @@ export const adminVerifyOtpSchema = z.object({
 export const adminResetPasswordSchema = z
   .object({
     resetToken: z.string().min(1, "Reset session is required"),
-    newPassword: z
-      .string()
-      .min(8, "New password must be at least 8 characters"),
-    confirmPassword: z.string().min(8, "Confirm your password"),
+    newPassword: strongPasswordSchema(),
+    confirmPassword: z.string().min(1, "Confirm your password"),
   })
   .refine((values) => values.newPassword === values.confirmPassword, {
     message: "Passwords do not match",
@@ -72,14 +67,16 @@ export const activateTenantSchema = z
     slug: z.string().min(1),
     token: z.string().min(1),
     temporaryPassword: z.string().min(1, "Temporary password is required"),
-    newPassword: z
-      .string()
-      .min(8, "New password must be at least 8 characters"),
-    confirmPassword: z.string().min(8, "Confirm your password"),
+    newPassword: strongPasswordSchema(),
+    confirmPassword: z.string().min(1, "Confirm your password"),
   })
   .refine((values) => values.newPassword === values.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
+  })
+  .refine((values) => values.temporaryPassword !== values.newPassword, {
+    message: "New password must be different from the temporary password",
+    path: ["newPassword"],
   });
 
 export type ActivateTenantInput = z.infer<typeof activateTenantSchema>;
