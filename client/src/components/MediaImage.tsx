@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { assetUrl } from "../lib/api-base";
 
 type Props = {
@@ -17,6 +17,10 @@ export function MediaImage({ src, alt, className = "", cacheKey }: Props) {
     resolved && cacheKey !== undefined
       ? `${resolved}${resolved.includes("?") ? "&" : "?"}v=${cacheKey}`
       : resolved;
+
+  useEffect(() => {
+    setFailed(false);
+  }, [href]);
 
   if (!href || failed) {
     return (

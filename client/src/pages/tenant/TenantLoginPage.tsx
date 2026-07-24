@@ -9,6 +9,7 @@ import {
 } from "../../components/BackButton";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
 import { SESSION_IDLE_MESSAGE } from "../../lib/session-timeout-config";
+import { safeTenantReturnPath } from "../../lib/tenant-session";
 import { tenantPortalPath } from "../../lib/tenant-paths";
 
 const loginSchema = z.object({
@@ -20,11 +21,12 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>;
 
 export function TenantLoginPage() {
-  const { login, isAuthenticated, tenant } = useTenantAuth();
+  const { login, isAuthenticated, tenant, status } = useTenantAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const idleExpired = searchParams.get("reason") === "idle";
+  const sessionExpired = searchParams.get("reason") === "session";
   const fromState =
     (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ??
     null;
@@ -40,10 +42,15 @@ export function TenantLoginPage() {
   });
 
   function homeFor(sessionSlug: string | undefined) {
-    if (fromState && fromState !== "/tenant" && !fromState.startsWith("/tenant/login")) {
-      return fromState;
-    }
-    return sessionSlug ? tenantPortalPath(sessionSlug) : "/tenant/login";
+    return safeTenantReturnPath(fromState, sessionSlug);
+  }
+
+  if (status === "loading") {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[var(--night)] text-[var(--muted)]">
+        <p className="text-sm">Checking session…</p>
+      </main>
+    );
   }
 
   if (isAuthenticated) {
@@ -127,6 +134,14 @@ export function TenantLoginPage() {
               className="mt-5 rounded-2xl border border-[var(--gold)]/25 bg-[rgba(212,165,116,0.12)] px-4 py-3 text-sm text-[var(--gold-soft)]"
             >
               {SESSION_IDLE_MESSAGE}
+            </div>
+          )}
+          {sessionExpired && !idleExpired && (
+            <div
+              role="status"
+              className="mt-5 rounded-2xl border border-[var(--gold)]/25 bg-[rgba(212,165,116,0.12)] px-4 py-3 text-sm text-[var(--gold-soft)]"
+            >
+              Your session is no longer valid. Please sign in again.
             </div>
           )}
 

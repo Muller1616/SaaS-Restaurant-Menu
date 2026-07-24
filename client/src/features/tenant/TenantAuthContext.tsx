@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -12,6 +13,7 @@ import {
   getCurrentBranchId,
   getStoredTenant,
   getTenantToken,
+  isTenantTokenExpired,
   setCurrentBranchId,
   setTenantSession,
   updateStoredTenant,
@@ -23,12 +25,19 @@ type LoginResult = {
   tenant: TenantSession;
 };
 
+export type TenantAuthStatus = "loading" | "authenticated" | "anonymous";
+
 type TenantAuthContextValue = {
   tenant: TenantSession | null;
   token: string | null;
   currentBranchId: string | null;
+  status: TenantAuthStatus;
   isAuthenticated: boolean;
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<TenantSession>;
+  login: (
+    email: string,
+    password: string,
+    rememberMe?: boolean,
+  ) => Promise<TenantSession>;
   logout: () => void;
   refreshTenant: () => Promise<void>;
   setBranch: (branchId: string) => void;
@@ -38,47 +47,120 @@ type TenantAuthContextValue = {
 const TenantAuthContext = createContext<TenantAuthContextValue | null>(null);
 
 export function TenantAuthProvider({ children }: { children: ReactNode }) {
-  const [tenant, setTenant] = useState<TenantSession | null>(() => getStoredTenant());
+  const [tenant, setTenant] = useState<TenantSession | null>(() =>
+    getStoredTenant(),
+  );
   const [token, setToken] = useState<string | null>(() => getTenantToken());
   const [currentBranchId, setBranchState] = useState<string | null>(() =>
     getCurrentBranchId(),
   );
+  const [status, setStatus] = useState<TenantAuthStatus>(() => {
+    const existing = getTenantToken();
+    if (!existing || isTenantTokenExpired(existing) || !getStoredTenant()) {
+      return existing ? "loading" : "anonymous";
+    }
+    return "loading";
+  });
 
-  const login = useCallback(
-    async (email: string, password: string, rememberMe = false) => {
-      const { data } = await api.post<ApiSuccess<LoginResult>>("/auth/tenant/login", {
-        email,
-        password,
-        rememberMe,
-      });
-
-      setTenantSession(data.data.token, data.data.tenant);
-      setToken(data.data.token);
-      setTenant(data.data.tenant);
-      setBranchState(getCurrentBranchId());
-      return data.data.tenant;
-    },
-    [],
-  );
-
-  const logout = useCallback(() => {
-    void api.post("/auth/tenant/logout").catch(() => undefined);
+  const applyAnonymous = useCallback(() => {
     clearTenantSession();
     setToken(null);
     setTenant(null);
     setBranchState(null);
+    setStatus("anonymous");
   }, []);
+
+  const applySession = useCallback((nextToken: string, nextTenant: TenantSession) => {
+    setTenantSession(nextToken, nextTenant);
+    setToken(nextToken);
+    setTenant(nextTenant);
+    setBranchState(getCurrentBranchId());
+    setStatus("authenticated");
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function bootstrap() {
+      const existingToken = getTenantToken();
+      const existingTenant = getStoredTenant();
+
+      if (
+        !existingToken ||
+        isTenantTokenExpired(existingToken) ||
+        !existingTenant
+      ) {
+        if (!cancelled) applyAnonymous();
+        return;
+      }
+
+      try {
+        const { data } = await api.get<ApiSuccess<TenantSession>>(
+          "/auth/tenant/me",
+        );
+        if (cancelled) return;
+        applySession(existingToken, data.data);
+      } catch {
+        if (!cancelled) applyAnonymous();
+      }
+    }
+
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
+  }, [applyAnonymous, applySession]);
+
+  useEffect(() => {
+    function onStorage(event: StorageEvent) {
+      if (event.key !== "kitchenos_tenant_token") return;
+      if (!event.newValue) applyAnonymous();
+    }
+    function onForcedLogout() {
+      applyAnonymous();
+    }
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("kitchenos-tenant-logout", onForcedLogout);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("kitchenos-tenant-logout", onForcedLogout);
+    };
+  }, [applyAnonymous]);
+
+  const login = useCallback(
+    async (email: string, password: string, rememberMe = false) => {
+      const { data } = await api.post<ApiSuccess<LoginResult>>(
+        "/auth/tenant/login",
+        {
+          email,
+          password,
+          rememberMe,
+        },
+      );
+
+      applySession(data.data.token, data.data.tenant);
+      return data.data.tenant;
+    },
+    [applySession],
+  );
+
+  const logout = useCallback(() => {
+    void api.post("/auth/tenant/logout").catch(() => undefined);
+    applyAnonymous();
+  }, [applyAnonymous]);
 
   const refreshTenant = useCallback(async () => {
     const { data } = await api.get<ApiSuccess<TenantSession>>("/auth/tenant/me");
     updateStoredTenant(data.data);
     setTenant(data.data);
+    setStatus("authenticated");
     const branchId = getCurrentBranchId();
     if (
       branchId &&
       !data.data.branches.some((branch) => branch.id === branchId)
     ) {
-      const next = data.data.defaultBranchId ?? data.data.branches[0]?.id ?? null;
+      const next =
+        data.data.defaultBranchId ?? data.data.branches[0]?.id ?? null;
       if (next) {
         setCurrentBranchId(next);
         setBranchState(next);
@@ -105,7 +187,8 @@ export function TenantAuthProvider({ children }: { children: ReactNode }) {
       tenant,
       token,
       currentBranchId,
-      isAuthenticated: Boolean(token && tenant),
+      status,
+      isAuthenticated: status === "authenticated" && Boolean(token && tenant),
       login,
       logout,
       refreshTenant,
@@ -116,6 +199,7 @@ export function TenantAuthProvider({ children }: { children: ReactNode }) {
       tenant,
       token,
       currentBranchId,
+      status,
       login,
       logout,
       refreshTenant,
@@ -125,7 +209,9 @@ export function TenantAuthProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <TenantAuthContext.Provider value={value}>{children}</TenantAuthContext.Provider>
+    <TenantAuthContext.Provider value={value}>
+      {children}
+    </TenantAuthContext.Provider>
   );
 }
 

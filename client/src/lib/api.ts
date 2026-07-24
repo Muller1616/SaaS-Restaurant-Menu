@@ -144,7 +144,24 @@ api.interceptors.response.use(
         localStorage.removeItem("kitchenos_tenant_token");
         localStorage.removeItem("kitchenos_tenant_user");
         localStorage.removeItem("kitchenos_current_branch_id");
-        window.location.assign("/tenant/login");
+        window.dispatchEvent(new Event("kitchenos-tenant-logout"));
+        window.location.assign("/tenant/login?reason=session");
+      }
+    }
+
+    if (error.response?.status === 403) {
+      const code = (error.response.data as { details?: { code?: string } } | undefined)
+        ?.details?.code;
+      const path = window.location.pathname;
+      if (
+        isTenantFrontendPath(path) &&
+        (code === "TENANT_SUSPENDED" || code === "TENANT_INACTIVE")
+      ) {
+        localStorage.removeItem("kitchenos_tenant_token");
+        localStorage.removeItem("kitchenos_tenant_user");
+        localStorage.removeItem("kitchenos_current_branch_id");
+        window.dispatchEvent(new Event("kitchenos-tenant-logout"));
+        window.location.assign("/tenant/login?reason=session");
       }
     }
     return Promise.reject(error);

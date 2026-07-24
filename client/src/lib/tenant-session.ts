@@ -101,3 +101,47 @@ export function clearTenantSession() {
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(BRANCH_KEY);
 }
+
+/** True when a JWT is missing, malformed, wrong role, or past `exp`. */
+export function isTenantTokenExpired(token: string | null | undefined) {
+  if (!token) return true;
+  const parts = token.split(".");
+  if (parts.length < 2 || !parts[1]) return true;
+  try {
+    const json = atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"));
+    const payload = JSON.parse(json) as { exp?: number; role?: string };
+    if (payload.role && payload.role !== "TENANT") return true;
+    if (typeof payload.exp !== "number") return true;
+    return payload.exp * 1000 <= Date.now() - 5_000;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Safe post-login path inside the tenant portal for the signed-in slug.
+ * Rejects admin paths, protocol-relative URLs, and other tenants' portals.
+ */
+export function safeTenantReturnPath(
+  pathname: string | null | undefined,
+  sessionSlug: string | undefined,
+) {
+  const fallback = sessionSlug
+    ? `/r/${encodeURIComponent(sessionSlug)}/dashboard`
+    : "/tenant/login";
+  if (!pathname || !sessionSlug) return fallback;
+  if (pathname.includes("//")) return fallback;
+  if (pathname.startsWith("/admin")) return fallback;
+  if (pathname.startsWith("/tenant/login") || pathname === "/tenant") {
+    return fallback;
+  }
+  const portalPrefix = `/r/${sessionSlug}`;
+  if (
+    pathname === portalPrefix ||
+    pathname.startsWith(`${portalPrefix}/`)
+  ) {
+    return pathname;
+  }
+  return fallback;
+}
+

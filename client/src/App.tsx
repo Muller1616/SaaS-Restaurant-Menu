@@ -212,6 +212,10 @@ export default function App() {
                         element={<TenantNotificationsPage />}
                       />
                       <Route path="settings" element={<TenantSettingsPage />} />
+                      <Route
+                        path="*"
+                        element={<Navigate to="dashboard" replace />}
+                      />
                     </Route>
                   </Route>
                 </Route>
@@ -238,6 +242,10 @@ export default function App() {
                     />
                     <Route path="activity" element={<AdminActivityPage />} />
                     <Route path="settings" element={<AdminSettingsPage />} />
+                    <Route
+                      path="*"
+                      element={<Navigate to="dashboard" replace />}
+                    />
                   </Route>
                 </Route>
 

@@ -1,27 +1,47 @@
 import { Navigate, Outlet, useLocation, useParams } from "react-router-dom";
 import { TENANT_SESSION_SYNC_CHANNEL } from "../../lib/session-timeout-config";
-import { looksLikePublicQrId, publicQrPath, tenantPortalPath } from "../../lib/tenant-paths";
+import {
+  looksLikePublicQrId,
+  publicQrPath,
+  tenantPortalPath,
+} from "../../lib/tenant-paths";
 import { IdleSessionGuard } from "../session/IdleSessionGuard";
 import { useTenantAuth } from "./TenantAuthContext";
 
+/**
+ * Central guard for tenant portal routes.
+ * Waits for /auth/tenant/me bootstrap so stale localStorage cannot open the portal.
+ */
 export function RequireTenantAuth() {
-  const { isAuthenticated, tenant, logout } = useTenantAuth();
+  const { status, isAuthenticated, tenant, logout } = useTenantAuth();
   const location = useLocation();
   const { tenantSlug } = useParams();
 
-  // Opaque QR ids belong to the public menu — never remap into the portal.
   if (tenantSlug && looksLikePublicQrId(tenantSlug)) {
     return <Navigate to={publicQrPath(tenantSlug)} replace />;
   }
 
-  if (!isAuthenticated || !tenant) {
-    return <Navigate to="/tenant/login" replace state={{ from: location }} />;
+  if (status === "loading") {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-[var(--night)] text-[var(--muted)]">
+        <div className="rounded-[1.75rem] border border-[var(--line)] bg-[var(--panel)] px-8 py-6 text-center">
+          <p className="text-[11px] tracking-[0.28em] text-[var(--gold)] uppercase">
+            KitchenOS
+          </p>
+          <p className="mt-3 text-sm">Verifying session…</p>
+        </div>
+      </div>
+    );
   }
 
-  // URL slug must match the signed-in restaurant (tenant isolation).
+  if (!isAuthenticated || !tenant) {
+    return (
+      <Navigate to="/tenant/login" replace state={{ from: location }} />
+    );
+  }
+
   if (tenantSlug && tenant.slug && tenantSlug !== tenant.slug) {
     const parts = location.pathname.split("/").filter(Boolean);
-    // /r/{wrongSlug}/menu → /r/{ownSlug}/menu
     const page = parts[2];
     const target = page
       ? tenantPortalPath(tenant.slug, page, ...parts.slice(3))
