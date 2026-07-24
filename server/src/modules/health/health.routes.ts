@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { env } from "../../config/env.js";
 import { getCacheStats } from "../../lib/cache/index.js";
 import { prisma } from "../../lib/prisma.js";
 
@@ -13,16 +14,10 @@ healthRouter.get("/", async (_req, res) => {
       service: "KitchenOS API",
       status: "ok",
       database: "connected",
+      // Keep public health lean — detailed cache metrics are on /cache (non-production or gated).
       cache: {
         backend: cache.backend,
         connected: cache.connected,
-        hits: cache.hits,
-        misses: cache.misses,
-        hitRatio: cache.hitRatio,
-        errors: cache.errors,
-        sets: cache.sets,
-        deletes: cache.deletes,
-        memoryKeys: cache.memoryKeys,
       },
       timestamp: new Date().toISOString(),
     });
@@ -37,8 +32,18 @@ healthRouter.get("/", async (_req, res) => {
   }
 });
 
-/** Dedicated cache metrics (same stats as /health.cache). */
-healthRouter.get("/cache", (_req, res) => {
+/** Detailed cache metrics — available in non-production, or with HEALTH_CACHE_TOKEN. */
+healthRouter.get("/cache", (req, res) => {
+  const token = process.env.HEALTH_CACHE_TOKEN?.trim();
+  const allowed =
+    !env.isProduction ||
+    (Boolean(token) && req.get("x-health-token") === token);
+
+  if (!allowed) {
+    res.status(404).json({ success: false, message: "Not found" });
+    return;
+  }
+
   const cache = getCacheStats();
   res.json({
     success: true,

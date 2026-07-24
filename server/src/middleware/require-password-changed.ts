@@ -27,6 +27,18 @@ export async function requirePasswordChanged(
       throw new AppError(401, "Unauthorized");
     }
 
+    if (tenant.status === "SUSPENDED") {
+      throw new AppError(403, "This account has been suspended.", {
+        code: "TENANT_SUSPENDED",
+      });
+    }
+
+    if (tenant.status !== "ACTIVE") {
+      throw new AppError(403, "Your restaurant account isn’t active", {
+        code: "TENANT_INACTIVE",
+      });
+    }
+
     if (tenant.mustChangePassword) {
       throw new AppError(
         403,

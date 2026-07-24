@@ -843,7 +843,7 @@ export async function requestTenantPasswordReset(email: string) {
   });
 
   const resetUrl = `${env.clientUrl}/tenant/reset-password?token=${rawToken}`;
-  await sendEmail({
+  const mailed = await sendEmail({
     to: tenant.email,
     subject: "Reset your KitchenOS password",
     text: `Hi ${tenant.fullName},
@@ -855,6 +855,17 @@ If you did not request this, you can ignore this email.
 
 KitchenOS Team`,
   });
+
+  if (!mailed.ok) {
+    await prisma.passwordResetToken.updateMany({
+      where: { tokenHash, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    throw new AppError(
+      502,
+      "We could not send the reset email. Please try again shortly or contact support.",
+    );
+  }
 
   return {
     message: "If that email exists, a reset link has been sent.",

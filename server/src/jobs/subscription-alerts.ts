@@ -159,6 +159,10 @@ export async function runSubscriptionAlertJob(now = new Date()) {
             subject: email.subject,
             text: email.text,
           },
+        }).then((result) => {
+          if (!result.emailed) {
+            throw new Error("Near-expiry alert email failed to send");
+          }
         });
 
         await markSent({
@@ -195,10 +199,15 @@ export async function runSubscriptionAlertJob(now = new Date()) {
           type: "SUBSCRIPTION",
           title: "Subscription expired",
           message: `${branchName}: your public menu is temporarily unavailable. Renew to restore access.`,
+          forceEmail: true,
           email: {
             subject: email.subject,
             text: email.text,
           },
+        }).then((result) => {
+          if (!result.emailed) {
+            throw new Error("Expired alert email failed to send");
+          }
         });
 
         await markSent({
