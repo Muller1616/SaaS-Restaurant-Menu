@@ -137,7 +137,8 @@ api.interceptors.response.use(
       if (path.startsWith("/admin") && path !== "/admin/login") {
         localStorage.removeItem("kitchenos_admin_token");
         localStorage.removeItem("kitchenos_admin_user");
-        window.location.assign("/admin/login");
+        window.dispatchEvent(new Event("kitchenos-admin-logout"));
+        window.location.assign("/admin/login?reason=session");
       }
       if (isTenantFrontendPath(path)) {
         localStorage.removeItem("kitchenos_tenant_token");

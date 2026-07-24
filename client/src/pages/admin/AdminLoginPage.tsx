@@ -8,7 +8,10 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import axios from "axios";
+import { useState } from "react";
 import { useAdminAuth } from "../../features/admin/AdminAuthContext";
+import { AdminForgotPasswordModal } from "../../features/admin/AdminForgotPasswordModal";
+import { safeAdminReturnPath } from "../../lib/admin-session";
 import { SESSION_IDLE_MESSAGE } from "../../lib/session-timeout-config";
 
 const loginSchema = z.object({
@@ -20,18 +23,21 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>;
 
 export function AdminLoginPage() {
-  const { login, isAuthenticated } = useAdminAuth();
+  const { login, isAuthenticated, status } = useAdminAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const [forgotOpen, setForgotOpen] = useState(false);
   const idleExpired = searchParams.get("reason") === "idle";
-  const from =
-    (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ??
-    "/admin";
+  const sessionExpired = searchParams.get("reason") === "session";
+  const from = safeAdminReturnPath(
+    (location.state as { from?: { pathname?: string } } | null)?.from?.pathname,
+  );
 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
     setError,
   } = useForm<LoginForm>({
@@ -43,8 +49,18 @@ export function AdminLoginPage() {
     },
   });
 
+  const loginEmail = watch("email");
+
+  if (status === "loading") {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[var(--night)] text-[var(--muted)]">
+        <p className="text-sm">Checking session…</p>
+      </main>
+    );
+  }
+
   if (isAuthenticated) {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to={from} replace />;
   }
 
   async function onSubmit(values: LoginForm) {
@@ -87,6 +103,14 @@ export function AdminLoginPage() {
             className="mt-5 rounded-2xl border border-[var(--gold)]/25 bg-[rgba(212,165,116,0.12)] px-4 py-3 text-sm text-[var(--gold-soft)]"
           >
             {SESSION_IDLE_MESSAGE}
+          </div>
+        )}
+        {sessionExpired && !idleExpired && (
+          <div
+            role="status"
+            className="mt-5 rounded-2xl border border-[var(--gold)]/25 bg-[rgba(212,165,116,0.12)] px-4 py-3 text-sm text-[var(--gold-soft)]"
+          >
+            Your admin session is no longer valid. Please sign in again.
           </div>
         )}
 
@@ -143,8 +167,28 @@ export function AdminLoginPage() {
           >
             {isSubmitting ? "Signing in…" : "Sign in"}
           </button>
+
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => setForgotOpen(true)}
+              className="text-sm font-medium text-[var(--gold-soft)] underline-offset-2 hover:underline"
+            >
+              Forgot password?
+            </button>
+          </div>
         </form>
       </div>
+
+      <AdminForgotPasswordModal
+        open={forgotOpen}
+        initialEmail={loginEmail}
+        onClose={() => setForgotOpen(false)}
+        onComplete={() => {
+          setForgotOpen(false);
+          navigate("/admin/login", { replace: true });
+        }}
+      />
     </main>
   );
 }

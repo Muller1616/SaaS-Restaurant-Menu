@@ -4,7 +4,7 @@ import { PageTransition } from "../navigation/PageTransition";
 import { useAdminAuth } from "./AdminAuthContext";
 
 const navItems = [
-  { to: "/admin", label: "Dashboard", end: true },
+  { to: "/admin/dashboard", label: "Dashboard", end: true },
   { to: "/admin/tenants", label: "Restaurants" },
   { to: "/admin/branches", label: "Branches" },
   { to: "/admin/approvals", label: "Applications" },
