@@ -145,6 +145,8 @@ export async function removeTenantLogo(tenantId: string) {
 export const updateSettingsSchema = z.object({
   emailNotificationsEnabled: z.boolean().optional(),
   phone: z.string().trim().min(7).optional(),
+  businessName: z.string().trim().min(2).optional(),
+  businessLocation: z.string().trim().min(2).optional(),
   businessDescription: z.string().trim().optional().nullable(),
 });
 
@@ -159,6 +161,10 @@ export async function updateTenantSettings(
         ? { emailNotificationsEnabled: input.emailNotificationsEnabled }
         : {}),
       ...(input.phone != null ? { phone: input.phone } : {}),
+      ...(input.businessName != null ? { businessName: input.businessName } : {}),
+      ...(input.businessLocation != null
+        ? { businessLocation: input.businessLocation }
+        : {}),
       ...(input.businessDescription !== undefined
         ? { businessDescription: input.businessDescription }
         : {}),
@@ -182,7 +188,14 @@ export async function updateTenantSettings(
     action: "UPDATE",
     entityType: "tenant_settings",
     entityId: tenantId,
-    details: input,
+    summary:
+      input.businessName != null
+        ? `Business name updated to ${tenant.businessName}`
+        : "Tenant settings updated",
+    details: {
+      ...input,
+      // never log sensitive fields beyond what's in input
+    },
   });
 
   await invalidateCachesForTenant(tenantId);
@@ -360,7 +373,16 @@ export async function getAdminTenant(id: string) {
       id: branch.id,
       name: branch.name,
       location: branch.location,
+      city: branch.city,
+      region: branch.region,
+      country: branch.country,
+      displayLocation: [branch.location, branch.city, branch.region, branch.country]
+        .filter(Boolean)
+        .join(", "),
+      phone: branch.phone,
+      managerName: branch.managerName,
       slug: branch.slug,
+      isActive: branch.isActive,
       itemCount: branch._count.menuItems,
       subscriptionStatus: branch.subscription?.status ?? null,
       planName: branch.subscription?.plan.name ?? null,
@@ -626,6 +648,9 @@ export async function listAdminBranches(filters: {
           OR: [
             { name: { contains: filters.q, mode: "insensitive" } },
             { location: { contains: filters.q, mode: "insensitive" } },
+            { city: { contains: filters.q, mode: "insensitive" } },
+            { region: { contains: filters.q, mode: "insensitive" } },
+            { country: { contains: filters.q, mode: "insensitive" } },
             { slug: { contains: filters.q, mode: "insensitive" } },
             {
               tenant: {
@@ -699,12 +724,20 @@ export async function listAdminBranches(filters: {
       id: branch.id,
       name: branch.name,
       location: branch.location,
+      city: branch.city,
+      region: branch.region,
+      country: branch.country,
+      displayLocation: [branch.location, branch.city, branch.region, branch.country]
+        .filter(Boolean)
+        .join(", "),
       phone: branch.phone,
+      managerName: branch.managerName,
       slug: branch.slug,
       isActive: branch.isActive,
       isDefault: branch.isDefault,
       deletedAt: branch.deletedAt,
       createdAt: branch.createdAt,
+      updatedAt: branch.updatedAt,
       itemCount: branch._count.menuItems,
       tenant: branch.tenant,
       subscription: branch.subscription

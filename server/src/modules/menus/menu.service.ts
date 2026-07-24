@@ -11,6 +11,7 @@ import { toPublicMediaUrl } from "../../lib/media-url.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error.js";
 import { buildPublicQrUrl } from "../../services/qr-url.js";
+import { formatBranchLocation } from "../../lib/branch-location.js";
 import { isRevokedQrToken } from "../qr/branch-qr-token.js";
 import {
   computeSubscriptionView,
@@ -481,7 +482,7 @@ async function loadPublicMenuByQrId(publicQrId: string) {
       businessName: tenant.businessName,
       logoUrl: toPublicMediaUrl(tenant.logoUrl),
       branchName: branch.name,
-      location: branch.location,
+      location: formatBranchLocation(branch),
       phone: branch.phone,
       message:
         "This menu is temporarily unavailable. Please check back later.",
@@ -493,7 +494,7 @@ async function loadPublicMenuByQrId(publicQrId: string) {
     businessName: tenant.businessName,
     logoUrl: toPublicMediaUrl(tenant.logoUrl),
     branchName: branch.name,
-    location: branch.location,
+    location: formatBranchLocation(branch),
     phone: branch.phone,
     categories: branch.categories.map((category) => ({
       id: category.id,
@@ -595,7 +596,7 @@ async function loadPublicMenu(tenantSlug: string, branchSlug?: string) {
       businessName: tenant.businessName,
       logoUrl: toPublicMediaUrl(tenant.logoUrl),
       branchName: branch.name,
-      location: branch.location,
+      location: formatBranchLocation(branch),
       phone: branch.phone,
       message:
         "This menu is temporarily unavailable. Please check back later.",
@@ -607,7 +608,7 @@ async function loadPublicMenu(tenantSlug: string, branchSlug?: string) {
     businessName: tenant.businessName,
     logoUrl: toPublicMediaUrl(tenant.logoUrl),
     branchName: branch.name,
-    location: branch.location,
+    location: formatBranchLocation(branch),
     phone: branch.phone,
     categories: branch.categories.map((category) => ({
       id: category.id,

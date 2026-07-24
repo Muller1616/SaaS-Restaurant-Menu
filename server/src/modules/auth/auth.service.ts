@@ -257,9 +257,14 @@ function serializeBranch(branch: {
   id: string;
   name: string;
   location: string;
+  city?: string | null;
+  region?: string | null;
+  country?: string | null;
   phone: string | null;
+  managerName?: string | null;
   slug: string;
   qrCodeUrl: string | null;
+  isActive?: boolean;
   isDefault: boolean;
   subscription: {
     id: string;
@@ -280,9 +285,14 @@ function serializeBranch(branch: {
     id: branch.id,
     name: branch.name,
     location: branch.location,
+    city: branch.city ?? null,
+    region: branch.region ?? null,
+    country: branch.country ?? null,
     phone: branch.phone,
+    managerName: branch.managerName ?? null,
     slug: branch.slug,
     qrCodeUrl: toPublicMediaUrl(branch.qrCodeUrl),
+    isActive: branch.isActive ?? true,
     isDefault: branch.isDefault,
     subscription: branch.subscription
       ? {
