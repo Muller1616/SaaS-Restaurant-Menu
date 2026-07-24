@@ -179,8 +179,14 @@ model Branch {
   id         String    @id @default(cuid())
   tenantId   String    @map("tenant_id")
   name       String
+  /// Street address / primary location line.
   location   String
+  city       String?
+  region     String?
+  country    String?
   phone      String?
+  /// Optional on-site manager display name.
+  managerName String?  @map("manager_name")
   slug       String
   /// Opaque public QR route id → `/r/{publicQrId}` (never the tenant slug).
   publicQrId String    @unique @map("public_qr_id")
