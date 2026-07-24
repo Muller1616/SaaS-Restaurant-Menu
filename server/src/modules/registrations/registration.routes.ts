@@ -9,7 +9,7 @@ import {
   createRegistration,
   listActivePlans,
 } from "../registrations/registration.service.js";
-import { getPublicMenu, getPublicMenuByQrId } from "../menus/menu.service.js";
+import { getPublicMenuByQrId } from "../menus/menu.service.js";
 
 export const publicRouter = Router();
 
@@ -71,64 +71,31 @@ publicRouter.post(
   },
 );
 
-/** @deprecated Legacy slug-based public menu (kept for old bookmarks). */
-publicRouter.get("/public/menu/:tenantSlug", async (req, res, next) => {
-  try {
-    const data = await getPublicMenu(String(req.params.tenantSlug));
-    res.json({ success: true, data });
-  } catch (error) {
-    next(error);
-  }
-});
+/**
+ * Legacy slug-based public menu routes — retired.
+ * Customer menus resolve only via opaque QR tokens: GET /public/qr/:publicQrId
+ * and frontend path /r/{32-hex-token}.
+ */
+function legacySlugMenuGone(_req: unknown, _res: unknown, next: (err?: unknown) => void) {
+  next(
+    new AppError(
+      410,
+      "Slug-based public menus are no longer available. Scan the restaurant QR code or open /r/{publicQrId}.",
+    ),
+  );
+}
 
-publicRouter.get(
-  "/public/menu/:tenantSlug/:branchSlug",
-  async (req, res, next) => {
-    try {
-      const data = await getPublicMenu(
-        String(req.params.tenantSlug),
-        String(req.params.branchSlug),
-      );
-      res.json({ success: true, data });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
-
+publicRouter.get("/public/menu/:tenantSlug", legacySlugMenuGone);
+publicRouter.get("/public/menu/:tenantSlug/:branchSlug", legacySlugMenuGone);
 publicRouter.post(
   "/public/menu/:tenantSlug/views",
   viewLimiter,
-  async (req, res, next) => {
-    try {
-      const data = await recordPublicMenuView({
-        tenantSlug: String(req.params.tenantSlug),
-        userAgent: req.get("user-agent"),
-        referer: req.get("referer"),
-      });
-      res.status(202).json({ success: true, data });
-    } catch (error) {
-      next(error);
-    }
-  },
+  legacySlugMenuGone,
 );
-
 publicRouter.post(
   "/public/menu/:tenantSlug/:branchSlug/views",
   viewLimiter,
-  async (req, res, next) => {
-    try {
-      const data = await recordPublicMenuView({
-        tenantSlug: String(req.params.tenantSlug),
-        branchSlug: String(req.params.branchSlug),
-        userAgent: req.get("user-agent"),
-        referer: req.get("referer"),
-      });
-      res.status(202).json({ success: true, data });
-    } catch (error) {
-      next(error);
-    }
-  },
+  legacySlugMenuGone,
 );
 
 publicRouter.post(
