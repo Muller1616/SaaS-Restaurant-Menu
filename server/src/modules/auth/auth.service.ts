@@ -219,7 +219,7 @@ export async function resetAdminPasswordWithToken(input: AdminResetPasswordInput
   await prisma.$transaction([
     prisma.adminUser.update({
       where: { id: record.adminId },
-      data: { passwordHash },
+      data: { passwordHash, tokenVersion: { increment: 1 } },
     }),
     prisma.adminPasswordOtp.update({
       where: { id: record.id },
@@ -386,6 +386,7 @@ export async function loginAdmin(input: AdminLoginInput) {
       adminRole: admin.role,
       email: admin.email,
       name: admin.name,
+      tokenVersion: admin.tokenVersion,
     },
     input.rememberMe,
   );
@@ -429,23 +430,33 @@ export async function getAdminProfile(adminId: string) {
 }
 
 export async function logoutAdmin(adminId: string) {
+  await prisma.adminUser.update({
+    where: { id: adminId },
+    data: { tokenVersion: { increment: 1 } },
+  });
   await logActivity({
     userType: "ADMIN",
     userId: adminId,
     action: "LOGOUT",
     entityType: "admin_user",
     entityId: adminId,
+    summary: "Admin logged out — sessions revoked",
   });
   return { loggedOut: true };
 }
 
 export async function logoutTenant(tenantId: string) {
+  await prisma.tenant.update({
+    where: { id: tenantId },
+    data: { tokenVersion: { increment: 1 } },
+  });
   await logActivity({
     userType: "TENANT",
     userId: tenantId,
     action: "LOGOUT",
     entityType: "tenant",
     entityId: tenantId,
+    summary: "Tenant logged out — sessions revoked",
   });
   return { loggedOut: true };
 }
@@ -513,6 +524,7 @@ export async function loginTenant(input: TenantLoginInput) {
       role: "TENANT",
       email: tenant.email,
       name: tenant.fullName,
+      tokenVersion: tenant.tokenVersion,
     },
     input.rememberMe,
   );
@@ -572,6 +584,7 @@ export async function changeTenantPassword(
       passwordHash,
       mustChangePassword: false,
       activatedAt: tenant.activatedAt ?? new Date(),
+      tokenVersion: { increment: 1 },
     },
   });
 
@@ -679,6 +692,7 @@ export async function activateTenantAccount(input: ActivateTenantInput) {
         passwordHash,
         mustChangePassword: false,
         activatedAt,
+        tokenVersion: { increment: 1 },
       },
     }),
     prisma.activationToken.update({
@@ -895,6 +909,7 @@ export async function resetTenantPassword(token: string, newPassword: string) {
       data: {
         passwordHash,
         mustChangePassword: false,
+        tokenVersion: { increment: 1 },
       },
     }),
     prisma.passwordResetToken.update({

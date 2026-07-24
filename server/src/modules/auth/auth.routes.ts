@@ -1,5 +1,4 @@
 import { Router } from "express";
-import rateLimit from "express-rate-limit";
 import {
   requireAdmin,
   requireAuth,
@@ -8,6 +7,7 @@ import {
 } from "../../middleware/auth.js";
 import { csrfTokenHandler } from "../../middleware/csrf.js";
 import { AppError } from "../../middleware/error.js";
+import { createAuthLimiter } from "../../lib/rate-limit.js";
 import {
   adminLoginSchema,
   activateTenantSchema,
@@ -43,21 +43,6 @@ export const authRouter = Router();
 authRouter.get("/csrf", csrfTokenHandler);
 // Allow POST as well so mistaken clients still bootstrap a token.
 authRouter.post("/csrf", csrfTokenHandler);
-
-function createAuthLimiter(message: string, max: number) {
-  return rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max,
-    standardHeaders: true,
-    legacyHeaders: false,
-    // Successful auth must not burn the budget — failed attempts only.
-    skipSuccessfulRequests: true,
-    message: {
-      success: false,
-      message,
-    },
-  });
-}
 
 const adminLoginLimiter = createAuthLimiter(
   "Too many admin login attempts. Try again in 15 minutes.",
@@ -268,23 +253,36 @@ const activationLimiter = createAuthLimiter(
   20,
 );
 
-authRouter.get("/tenant/activate", activationLimiter, async (req, res, next) => {
-  try {
-    const parsed = previewActivationSchema.safeParse({
-      slug: req.query.slug,
-      token: req.query.token,
-    });
-    if (!parsed.success) {
-      throw new AppError(400, "Invalid activation link", parsed.error.flatten());
+/**
+ * Preview activation — token in body only (never query string / access logs).
+ * Legacy GET with ?token= is rejected so secrets are not logged by proxies.
+ */
+authRouter.post(
+  "/tenant/activate/preview",
+  activationLimiter,
+  async (req, res, next) => {
+    try {
+      const parsed = previewActivationSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError(400, "Invalid activation link", parsed.error.flatten());
+      }
+      const result = await previewTenantActivation(
+        parsed.data.slug,
+        parsed.data.token,
+      );
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
     }
-    const result = await previewTenantActivation(
-      parsed.data.slug,
-      parsed.data.token,
-    );
-    res.json({ success: true, data: result });
-  } catch (error) {
-    next(error);
-  }
+  },
+);
+
+authRouter.get("/tenant/activate", activationLimiter, (_req, res) => {
+  res.status(405).json({
+    success: false,
+    message:
+      "Use POST /auth/tenant/activate/preview with slug and token in the JSON body.",
+  });
 });
 
 authRouter.post("/tenant/activate", activationLimiter, async (req, res, next) => {

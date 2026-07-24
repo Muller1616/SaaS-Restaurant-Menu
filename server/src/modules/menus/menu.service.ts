@@ -469,13 +469,39 @@ async function loadPublicMenuByQrId(publicQrId: string) {
     };
   }
 
-  let subStatus = branch.subscription?.status ?? null;
-  if (branch.subscription) {
-    const fresh = await syncSubscriptionStatus(branch.subscription.id);
-    subStatus = fresh?.status ?? subStatus;
+  // Keep public QR loads mostly read-only. Only promote ended TRIAL → ACTIVE.
+  let subscription = branch.subscription;
+  if (
+    subscription?.status === "TRIAL" &&
+    subscription.expiryDate &&
+    subscription.expiryDate.getTime() < Date.now()
+  ) {
+    const fresh = await syncSubscriptionStatus(subscription.id);
+    if (fresh) {
+      subscription = {
+        ...subscription,
+        status: fresh.status,
+        startDate: fresh.startDate,
+        expiryDate: fresh.expiryDate,
+      };
+    }
   }
 
-  if (!subStatus || ["EXPIRED", "SUSPENDED", "CANCELLED"].includes(subStatus)) {
+  const subView = subscription
+    ? computeSubscriptionView({
+        status: subscription.status,
+        expiryDate: subscription.expiryDate,
+      })
+    : null;
+
+  if (
+    !subscription ||
+    !subView ||
+    subView.isExpired ||
+    subscription.status === "SUSPENDED" ||
+    subscription.status === "CANCELLED" ||
+    subscription.status === "EXPIRED"
+  ) {
     return {
       unavailable: true as const,
       reason: "expired" as const,
@@ -583,13 +609,38 @@ async function loadPublicMenu(tenantSlug: string, branchSlug?: string) {
     throw new AppError(404, "Menu not found");
   }
 
-  let subStatus = branch.subscription?.status ?? null;
-  if (branch.subscription) {
-    const fresh = await syncSubscriptionStatus(branch.subscription.id);
-    subStatus = fresh?.status ?? subStatus;
+  let subscription = branch.subscription;
+  if (
+    subscription?.status === "TRIAL" &&
+    subscription.expiryDate &&
+    subscription.expiryDate.getTime() < Date.now()
+  ) {
+    const fresh = await syncSubscriptionStatus(subscription.id);
+    if (fresh) {
+      subscription = {
+        ...subscription,
+        status: fresh.status,
+        startDate: fresh.startDate,
+        expiryDate: fresh.expiryDate,
+      };
+    }
   }
 
-  if (!subStatus || ["EXPIRED", "SUSPENDED", "CANCELLED"].includes(subStatus)) {
+  const subView = subscription
+    ? computeSubscriptionView({
+        status: subscription.status,
+        expiryDate: subscription.expiryDate,
+      })
+    : null;
+
+  if (
+    !subscription ||
+    !subView ||
+    subView.isExpired ||
+    subscription.status === "SUSPENDED" ||
+    subscription.status === "CANCELLED" ||
+    subscription.status === "EXPIRED"
+  ) {
     return {
       unavailable: true as const,
       reason: "expired" as const,

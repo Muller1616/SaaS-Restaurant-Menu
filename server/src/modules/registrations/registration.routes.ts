@@ -1,6 +1,6 @@
 import { Router } from "express";
-import rateLimit from "express-rate-limit";
 import { AppError } from "../../middleware/error.js";
+import { createRateLimiter } from "../../lib/rate-limit.js";
 import { optimizeRequestImage } from "../../middleware/optimize-upload.js";
 import { paymentUpload } from "../../middleware/upload.js";
 import { recordPublicMenuView } from "../analytics/analytics.service.js";
@@ -13,29 +13,35 @@ import { getPublicMenuByQrId } from "../menus/menu.service.js";
 
 export const publicRouter = Router();
 
-const viewLimiter = rateLimit({
+const viewLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    message: "Too many view events. Try again shortly.",
-  },
+  message: "Too many view events. Try again shortly.",
+  prefix: "views",
 });
 
-const registrationLimiter = rateLimit({
+const publicMenuLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 120,
+  message: "Too many menu requests. Try again shortly.",
+  prefix: "public-menu",
+});
+
+const plansLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: "Too many plan requests. Try again shortly.",
+  prefix: "plans",
+});
+
+const registrationLimiter = createRateLimiter({
   windowMs: 60 * 60 * 1000,
   max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    message: "Too many registration attempts. Please try again later.",
-  },
+  message: "Too many registration attempts. Please try again later.",
+  prefix: "register",
 });
 
-publicRouter.get("/plans", async (_req, res, next) => {
+publicRouter.get("/plans", plansLimiter, async (_req, res, next) => {
   try {
     const plans = await listActivePlans();
     res.json({ success: true, data: plans });
@@ -45,14 +51,18 @@ publicRouter.get("/plans", async (_req, res, next) => {
 });
 
 /** Canonical customer menu — opaque QR public id only. */
-publicRouter.get("/public/qr/:publicQrId", async (req, res, next) => {
-  try {
-    const data = await getPublicMenuByQrId(String(req.params.publicQrId));
-    res.json({ success: true, data });
-  } catch (error) {
-    next(error);
-  }
-});
+publicRouter.get(
+  "/public/qr/:publicQrId",
+  publicMenuLimiter,
+  async (req, res, next) => {
+    try {
+      const data = await getPublicMenuByQrId(String(req.params.publicQrId));
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 publicRouter.post(
   "/public/qr/:publicQrId/views",
