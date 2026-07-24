@@ -3,15 +3,17 @@ import axios from "axios";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
+import { PasswordRequirements } from "../../components/PasswordRequirements";
 import { useTenantAuth } from "../../features/tenant/TenantAuthContext";
-import { tenantPortalPath } from "../../lib/tenant-paths";
 import { api } from "../../lib/api";
+import { strongPasswordSchema } from "../../lib/password-policy";
+import { tenantPortalPath } from "../../lib/tenant-paths";
 
 const schema = z
   .object({
     currentPassword: z.string().min(1, "Current password is required"),
-    newPassword: z.string().min(8, "At least 8 characters"),
-    confirmPassword: z.string().min(8, "Confirm your password"),
+    newPassword: strongPasswordSchema(),
+    confirmPassword: z.string().min(1, "Confirm your password"),
   })
   .refine((values) => values.newPassword === values.confirmPassword, {
     message: "Passwords do not match",
@@ -22,17 +24,27 @@ type FormValues = z.infer<typeof schema>;
 
 export function TenantChangePasswordPage() {
   const { markPasswordChanged, tenant } = useTenantAuth();
-  const portal = (...segments: string[]) => tenantPortalPath(tenant?.slug ?? "", ...segments);
+  const portal = (...segments: string[]) =>
+    tenantPortalPath(tenant?.slug ?? "", ...segments);
   const navigate = useNavigate();
 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
     setError,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
+    defaultValues: {
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    },
   });
+
+  const newPassword = watch("newPassword");
+  const confirmPassword = watch("confirmPassword");
 
   async function onSubmit(values: FormValues) {
     try {
@@ -71,6 +83,7 @@ export function TenantChangePasswordPage() {
             <label className="mb-1 block text-sm text-white">Current password</label>
             <input
               type="password"
+              autoComplete="current-password"
               className="w-full rounded-xl border border-[var(--line)] bg-black/30 px-3 py-2.5 text-white outline-none focus:border-[var(--gold)]"
               {...register("currentPassword")}
             />
@@ -84,8 +97,14 @@ export function TenantChangePasswordPage() {
             <label className="mb-1 block text-sm text-white">New password</label>
             <input
               type="password"
+              autoComplete="new-password"
               className="w-full rounded-xl border border-[var(--line)] bg-black/30 px-3 py-2.5 text-white outline-none focus:border-[var(--gold)]"
               {...register("newPassword")}
+            />
+            <PasswordRequirements
+              password={newPassword ?? ""}
+              confirmPassword={confirmPassword}
+              showConfirmMatch
             />
             {errors.newPassword && (
               <p className="mt-1 text-sm text-[var(--danger)]">
@@ -97,6 +116,7 @@ export function TenantChangePasswordPage() {
             <label className="mb-1 block text-sm text-white">Confirm password</label>
             <input
               type="password"
+              autoComplete="new-password"
               className="w-full rounded-xl border border-[var(--line)] bg-black/30 px-3 py-2.5 text-white outline-none focus:border-[var(--gold)]"
               {...register("confirmPassword")}
             />

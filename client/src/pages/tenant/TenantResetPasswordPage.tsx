@@ -3,13 +3,15 @@ import axios from "axios";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
-import { api } from "../../lib/api";
 import { BackButton } from "../../components/BackButton";
+import { PasswordRequirements } from "../../components/PasswordRequirements";
+import { api } from "../../lib/api";
+import { strongPasswordSchema } from "../../lib/password-policy";
 
 const schema = z
   .object({
-    newPassword: z.string().min(8, "At least 8 characters"),
-    confirmPassword: z.string().min(8, "Confirm your password"),
+    newPassword: strongPasswordSchema(),
+    confirmPassword: z.string().min(1, "Confirm your password"),
   })
   .refine((values) => values.newPassword === values.confirmPassword, {
     message: "Passwords do not match",
@@ -26,15 +28,23 @@ export function TenantResetPasswordPage() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
     setError,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
+    defaultValues: { newPassword: "", confirmPassword: "" },
   });
+
+  const newPassword = watch("newPassword");
+  const confirmPassword = watch("confirmPassword");
 
   async function onSubmit(values: FormValues) {
     if (!token) {
-      setError("root", { message: "This reset link is missing or incomplete. Please request a new one." });
+      setError("root", {
+        message:
+          "This reset link is missing or incomplete. Please request a new one.",
+      });
       return;
     }
     try {
@@ -67,8 +77,14 @@ export function TenantResetPasswordPage() {
             <label className="mb-1 block text-sm text-white">New password</label>
             <input
               type="password"
+              autoComplete="new-password"
               className="w-full rounded-xl border border-[var(--line)] bg-black/30 px-3 py-2.5 text-white outline-none focus:border-[var(--gold)]"
               {...register("newPassword")}
+            />
+            <PasswordRequirements
+              password={newPassword ?? ""}
+              confirmPassword={confirmPassword}
+              showConfirmMatch
             />
             {errors.newPassword && (
               <p className="mt-1 text-sm text-[var(--danger)]">
@@ -80,6 +96,7 @@ export function TenantResetPasswordPage() {
             <label className="mb-1 block text-sm text-white">Confirm password</label>
             <input
               type="password"
+              autoComplete="new-password"
               className="w-full rounded-xl border border-[var(--line)] bg-black/30 px-3 py-2.5 text-white outline-none focus:border-[var(--gold)]"
               {...register("confirmPassword")}
             />
