@@ -95,5 +95,14 @@ export const env = {
    * Optional Redis URL for distributed response caching.
    * When unset, the API uses process-local memory cache (single instance).
    */
+  /**
+   * Minimum length for newly created / changed passwords (floor 8).
+   * Increase (e.g. 12) without code changes when tightening policy.
+   */
+  passwordMinLength: (() => {
+    const n = Number(process.env.PASSWORD_MIN_LENGTH ?? 8);
+    if (!Number.isFinite(n) || n < 8) return 8;
+    return Math.floor(n);
+  })(),
   redisUrl: (process.env.REDIS_URL ?? "").trim() || null,
 } as const;
