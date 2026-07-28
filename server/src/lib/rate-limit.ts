@@ -12,6 +12,7 @@ type IncrementResult = {
 /**
  * Minimal Redis store for express-rate-limit (shared across instances).
  * Falls back to the default memory store when REDIS_URL is unset (local dev).
+ * Redis errors / timeouts fail open so auth never hangs forever.
  */
 class RedisRateLimitStore implements Store {
   prefix: string;
@@ -32,25 +33,48 @@ class RedisRateLimitStore implements Store {
   }
 
   async increment(key: string): Promise<IncrementResult> {
-    const redisKey = this.key(key);
-    const hits = await this.client.incr(redisKey);
-    if (hits === 1) {
-      await this.client.pexpire(redisKey, this.windowMs);
+    try {
+      const redisKey = this.key(key);
+      const hits = await this.client.incr(redisKey);
+      if (hits === 1) {
+        await this.client.pexpire(redisKey, this.windowMs);
+      }
+      const ttl = await this.client.pttl(redisKey);
+      const resetTime =
+        ttl > 0 ? new Date(Date.now() + ttl) : new Date(Date.now() + this.windowMs);
+      return { totalHits: hits, resetTime };
+    } catch (error) {
+      logger.warn("Rate-limit Redis increment failed — allowing request", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Fail open: never block auth behind a dead Redis.
+      return {
+        totalHits: 1,
+        resetTime: new Date(Date.now() + this.windowMs),
+      };
     }
-    const ttl = await this.client.pttl(redisKey);
-    const resetTime =
-      ttl > 0 ? new Date(Date.now() + ttl) : new Date(Date.now() + this.windowMs);
-    return { totalHits: hits, resetTime };
   }
 
   async decrement(key: string): Promise<void> {
-    const redisKey = this.key(key);
-    const value = await this.client.decr(redisKey);
-    if (value <= 0) await this.client.del(redisKey);
+    try {
+      const redisKey = this.key(key);
+      const value = await this.client.decr(redisKey);
+      if (value <= 0) await this.client.del(redisKey);
+    } catch (error) {
+      logger.warn("Rate-limit Redis decrement failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   async resetKey(key: string): Promise<void> {
-    await this.client.del(this.key(key));
+    try {
+      await this.client.del(this.key(key));
+    } catch (error) {
+      logger.warn("Rate-limit Redis resetKey failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }
 
@@ -64,6 +88,9 @@ function getRateLimitRedis(): Redis | null {
       maxRetriesPerRequest: 1,
       enableReadyCheck: true,
       lazyConnect: false,
+      connectTimeout: 5_000,
+      // Prevent auth middleware from waiting forever on a stalled Redis.
+      commandTimeout: 3_000,
     });
     sharedRedis.on("error", (err: Error) => {
       logger.warn("Rate-limit Redis error", { error: err.message });

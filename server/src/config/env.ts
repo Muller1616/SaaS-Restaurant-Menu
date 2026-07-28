@@ -88,10 +88,24 @@ if (isProduction) {
 }
 
 const smtpHost = process.env.SMTP_HOST ?? "localhost";
+const smtpPort = Number(process.env.SMTP_PORT ?? 1025);
 const smtpUser = process.env.SMTP_USER ?? "";
 const smtpPass = process.env.SMTP_PASS ?? "";
 const smtpFrom =
   process.env.SMTP_FROM ?? "KitchenOS <noreply@kitchenos.local>";
+/** Explicit override; otherwise port 465 ⇒ implicit TLS, else STARTTLS. */
+const smtpSecureEnv = (process.env.SMTP_SECURE ?? "").trim().toLowerCase();
+const smtpSecure =
+  smtpSecureEnv === "true" || smtpSecureEnv === "1"
+    ? true
+    : smtpSecureEnv === "false" || smtpSecureEnv === "0"
+      ? false
+      : smtpPort === 465;
+const smtpTimeoutMs = (() => {
+  const n = Number(process.env.SMTP_TIMEOUT_MS ?? 20_000);
+  if (!Number.isFinite(n) || n < 3_000) return 20_000;
+  return Math.min(Math.floor(n), 60_000);
+})();
 if (isProduction) {
   if (smtpHost === "localhost" || smtpHost === "127.0.0.1") {
     throw new Error("SMTP_HOST must be a real mail provider in production");
@@ -169,10 +183,13 @@ export const env = {
   },
   smtp: {
     host: smtpHost,
-    port: Number(process.env.SMTP_PORT ?? 1025),
+    port: smtpPort,
+    secure: smtpSecure,
     user: smtpUser,
     pass: smtpPass,
     from: smtpFrom,
+    /** Max wait for verify/sendMail before failing the HTTP request. */
+    timeoutMs: smtpTimeoutMs,
   },
   /** How often FR-8.1 subscription alert job runs (minutes). */
   subscriptionAlertsIntervalMinutes: Number(
