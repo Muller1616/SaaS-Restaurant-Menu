@@ -2,14 +2,47 @@ import nodemailer from "nodemailer";
 import { env } from "../config/env.js";
 import { logger } from "../lib/logger.js";
 
+/** Hard ceiling so a dead SMTP host cannot stall an HTTP request forever. */
+const SMTP_OPERATION_TIMEOUT_MS = env.smtp.timeoutMs;
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 const transporter = nodemailer.createTransport({
   host: env.smtp.host,
   port: env.smtp.port,
-  secure: env.smtp.port === 465,
+  secure: env.smtp.secure,
   auth:
     env.smtp.user && env.smtp.pass
       ? { user: env.smtp.user, pass: env.smtp.pass }
       : undefined,
+  connectionTimeout: Math.min(10_000, SMTP_OPERATION_TIMEOUT_MS),
+  greetingTimeout: Math.min(10_000, SMTP_OPERATION_TIMEOUT_MS),
+  socketTimeout: Math.min(15_000, SMTP_OPERATION_TIMEOUT_MS),
+  // Port 587 / STARTTLS (e.g. Gmail): require the upgrade instead of hanging.
+  requireTLS: !env.smtp.secure && env.smtp.port !== 25,
+  tls: {
+    servername: env.smtp.host,
+  },
 });
 
 export async function sendEmail(input: {
@@ -18,31 +51,40 @@ export async function sendEmail(input: {
   text: string;
   html?: string;
 }) {
+  logger.info("Email send started", {
+    to: input.to,
+    subject: input.subject,
+    smtpHost: env.smtp.host,
+    smtpPort: env.smtp.port,
+    smtpSecure: env.smtp.secure,
+  });
+
   try {
-    const info = await transporter.sendMail({
-      from: env.smtp.from,
-      to: input.to,
-      subject: input.subject,
-      text: input.text,
-      html: input.html ?? `<pre>${input.text}</pre>`,
-    });
-    logger.info("Email sent", {
+    const info = await withTimeout(
+      transporter.sendMail({
+        from: env.smtp.from,
+        to: input.to,
+        subject: input.subject,
+        text: input.text,
+        html: input.html ?? `<pre>${input.text}</pre>`,
+      }),
+      SMTP_OPERATION_TIMEOUT_MS,
+      "SMTP sendMail",
+    );
+    logger.info("Email send completed", {
       to: input.to,
       subject: input.subject,
       messageId: info.messageId,
     });
     return { ok: true as const, messageId: info.messageId };
   } catch (error) {
-    logger.error(
-      "Email send failed",
-      error,
-      {
-        to: input.to,
-        subject: input.subject,
-        smtpHost: env.smtp.host,
-        smtpPort: env.smtp.port,
-      },
-    );
+    logger.error("Email send failed", error, {
+      to: input.to,
+      subject: input.subject,
+      smtpHost: env.smtp.host,
+      smtpPort: env.smtp.port,
+      smtpSecure: env.smtp.secure,
+    });
     return { ok: false as const, error };
   }
 }
@@ -50,16 +92,22 @@ export async function sendEmail(input: {
 /** Soft SMTP probe for startup diagnostics — never throws. */
 export async function verifySmtpConnection(): Promise<boolean> {
   try {
-    await transporter.verify();
+    await withTimeout(
+      transporter.verify(),
+      SMTP_OPERATION_TIMEOUT_MS,
+      "SMTP verify",
+    );
     logger.info("SMTP connection verified", {
       host: env.smtp.host,
       port: env.smtp.port,
+      secure: env.smtp.secure,
     });
     return true;
   } catch (error) {
     logger.warn("SMTP connection check failed — emails may not deliver", {
       host: env.smtp.host,
       port: env.smtp.port,
+      secure: env.smtp.secure,
       error: error instanceof Error ? error.message : String(error),
     });
     return false;

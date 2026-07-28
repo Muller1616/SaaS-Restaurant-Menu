@@ -7,6 +7,7 @@ import {
 } from "../../middleware/auth.js";
 import { csrfTokenHandler } from "../../middleware/csrf.js";
 import { AppError } from "../../middleware/error.js";
+import { logger } from "../../lib/logger.js";
 import { createAuthLimiter } from "../../lib/rate-limit.js";
 import {
   adminLoginSchema,
@@ -59,12 +60,14 @@ const passwordResetLimiter = createAuthLimiter(
 
 authRouter.post("/admin/login", adminLoginLimiter, async (req, res, next) => {
   try {
+    logger.info("POST /auth/admin/login received");
     const parsed = adminLoginSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
     }
 
     const result = await loginAdmin(parsed.data);
+    logger.info("POST /auth/admin/login completed");
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);
@@ -113,11 +116,13 @@ authRouter.post(
   adminOtpLimiter,
   async (req, res, next) => {
     try {
+      logger.info("POST /auth/admin/forgot-password received");
       const parsed = forgotPasswordSchema.safeParse(req.body);
       if (!parsed.success) {
         throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const data = await requestAdminPasswordOtp(parsed.data.email);
+      logger.info("POST /auth/admin/forgot-password completed");
       res.json({ success: true, data });
     } catch (error) {
       next(error);
@@ -130,11 +135,13 @@ authRouter.post(
   adminOtpVerifyLimiter,
   async (req, res, next) => {
     try {
+      logger.info("POST /auth/admin/verify-otp received");
       const parsed = adminVerifyOtpSchema.safeParse(req.body);
       if (!parsed.success) {
         throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
       const data = await verifyAdminPasswordOtp(parsed.data);
+      logger.info("POST /auth/admin/verify-otp completed");
       res.json({ success: true, data });
     } catch (error) {
       next(error);
@@ -161,12 +168,14 @@ authRouter.post(
 
 authRouter.post("/tenant/login", tenantLoginLimiter, async (req, res, next) => {
   try {
+    logger.info("POST /auth/tenant/login received");
     const parsed = tenantLoginSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
     }
 
     const result = await loginTenant(parsed.data);
+    logger.info("POST /auth/tenant/login completed");
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);
@@ -221,11 +230,13 @@ authRouter.post(
 
 authRouter.post("/tenant/forgot-password", passwordResetLimiter, async (req, res, next) => {
   try {
+    logger.info("POST /auth/tenant/forgot-password received");
     const parsed = forgotPasswordSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
     }
     const result = await requestTenantPasswordReset(parsed.data.email);
+    logger.info("POST /auth/tenant/forgot-password completed");
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);

@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomInt } from "node:crypto";
 import { env } from "../../config/env.js";
 import { logActivity } from "../../lib/activity-log.js";
 import { signAccessToken } from "../../lib/jwt.js";
+import { logger } from "../../lib/logger.js";
 import { toPublicMediaUrl } from "../../lib/media-url.js";
 import { generateSecurePassword } from "../../lib/password.js";
 import { passwordPolicyErrorMessage } from "../../lib/password-policy.js";
@@ -49,6 +50,10 @@ const GENERIC_ADMIN_OTP_MESSAGE =
  */
 export async function requestAdminPasswordOtp(email: string) {
   const normalized = email.toLowerCase().trim();
+  logger.info("Admin password OTP request received", {
+    emailDomain: normalized.includes("@") ? normalized.split("@")[1] : null,
+  });
+
   const admin = await prisma.adminUser.findUnique({
     where: { email: normalized },
   });
@@ -56,6 +61,7 @@ export async function requestAdminPasswordOtp(email: string) {
   const expiresInSeconds = Math.floor(ADMIN_OTP_TTL_MS / 1000);
 
   if (!admin) {
+    logger.info("Admin password OTP skipped — no matching account");
     return {
       message: GENERIC_ADMIN_OTP_MESSAGE,
       expiresInSeconds,
@@ -65,6 +71,11 @@ export async function requestAdminPasswordOtp(email: string) {
   const rawOtp = generateAdminOtp();
   const otpHash = hashToken(rawOtp);
   const expiresAt = new Date(Date.now() + ADMIN_OTP_TTL_MS);
+
+  logger.info("Admin password OTP generated", {
+    adminId: admin.id,
+    expiresAt: expiresAt.toISOString(),
+  });
 
   await prisma.$transaction([
     prisma.adminPasswordOtp.updateMany({
@@ -112,12 +123,16 @@ export async function requestAdminPasswordOtp(email: string) {
   });
 
   if (!mailed.ok) {
+    logger.warn("Admin password OTP email delivery failed", {
+      adminId: admin.id,
+    });
     throw new AppError(
       502,
       "We could not send the reset code. Please try again shortly or contact support.",
     );
   }
 
+  logger.info("Admin password OTP response ready", { adminId: admin.id });
   return {
     message: GENERIC_ADMIN_OTP_MESSAGE,
     expiresInSeconds,
@@ -366,16 +381,24 @@ function toTenantSession(tenant: NonNullable<Awaited<ReturnType<typeof getTenant
 }
 
 export async function loginAdmin(input: AdminLoginInput) {
+  const email = input.email.toLowerCase().trim();
+  logger.info("Admin login attempt", {
+    emailDomain: email.includes("@") ? email.split("@")[1] : null,
+    rememberMe: Boolean(input.rememberMe),
+  });
+
   const admin = await prisma.adminUser.findUnique({
-    where: { email: input.email.toLowerCase().trim() },
+    where: { email },
   });
 
   if (!admin) {
+    logger.info("Admin login failed — unknown email");
     throw new AppError(401, "Invalid email or password");
   }
 
   const valid = await bcrypt.compare(input.password, admin.passwordHash);
   if (!valid) {
+    logger.info("Admin login failed — bad password", { adminId: admin.id });
     throw new AppError(401, "Invalid email or password");
   }
 
@@ -399,6 +422,7 @@ export async function loginAdmin(input: AdminLoginInput) {
     entityId: admin.id,
   });
 
+  logger.info("Admin login succeeded", { adminId: admin.id });
   return {
     token,
     admin: {
@@ -830,8 +854,13 @@ export async function requestTenantActivationEmail(email: string) {
 }
 
 export async function requestTenantPasswordReset(email: string) {
+  const normalized = email.toLowerCase().trim();
+  logger.info("Tenant password reset request received", {
+    emailDomain: normalized.includes("@") ? normalized.split("@")[1] : null,
+  });
+
   const tenant = await prisma.tenant.findUnique({
-    where: { email: email.toLowerCase().trim() },
+    where: { email: normalized },
   });
 
   // Always return success to avoid email enumeration
@@ -841,6 +870,7 @@ export async function requestTenantPasswordReset(email: string) {
     !tenant.passwordHash ||
     !tenant.activatedAt
   ) {
+    logger.info("Tenant password reset skipped — no eligible account");
     return { message: "If that email exists, a reset link has been sent." };
   }
 
@@ -875,12 +905,16 @@ KitchenOS Team`,
       where: { tokenHash, usedAt: null },
       data: { usedAt: new Date() },
     });
+    logger.warn("Tenant password reset email delivery failed", {
+      tenantId: tenant.id,
+    });
     throw new AppError(
       502,
       "We could not send the reset email. Please try again shortly or contact support.",
     );
   }
 
+  logger.info("Tenant password reset email sent", { tenantId: tenant.id });
   return {
     message: "If that email exists, a reset link has been sent.",
   };

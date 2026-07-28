@@ -54,6 +54,7 @@ export async function initCache() {
       enableReadyCheck: true,
       lazyConnect: true,
       connectTimeout: 5_000,
+      commandTimeout: 3_000,
     });
     redis = client;
 
