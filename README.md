@@ -40,7 +40,7 @@ Dev seed does **not** invent passwords when those vars are unset.
 
 1. Use `render.yaml` or create a Web Service from `server/Dockerfile`.
 2. Attach **PostgreSQL** and **Redis** (`REDIS_URL` is required in production).
-3. Attach a **persistent disk** for `uploads/`.
+3. Configure **Cloudinary** (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`) — uploads no longer use a Render disk.
 4. Release command is baked into the Docker image: `prisma migrate deploy` then `node dist/server.js`.
 5. Required env (HTTPS origins, no localhost):
 
@@ -50,7 +50,8 @@ Dev seed does **not** invent passwords when those vars are unset.
 | `REDIS_URL` | Shared cache + rate limits |
 | `JWT_SECRET` | ≥32 chars, not a placeholder |
 | `CLIENT_URL` / `PUBLIC_APP_URL` | Vercel HTTPS origin |
-| `PUBLIC_API_URL` | This API’s HTTPS origin (absolute media URLs) |
+| `PUBLIC_API_URL` | This API’s HTTPS origin (legacy media URL fallback) |
+| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Image hosting |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Real mail provider |
 
 Optional first-time admin bootstrap (never on every deploy):

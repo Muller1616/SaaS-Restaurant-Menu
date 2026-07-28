@@ -1,9 +1,9 @@
-# PAID / Starter blueprint only (disk + Render Redis + Render Postgres).
-# Do NOT use this Blueprint on Render Free — Free has no persistent disks and
-# no free Render Postgres/Redis. For free-tier deploy: create a Free Docker
-# Web Service manually + Neon Postgres + Upstash Redis (see deployment guide).
+# PAID / Starter blueprint (Render Postgres + Redis).
+# Uploads go to Cloudinary — no persistent disk required.
 #
-# Deploy paid stack from: https://dashboard.render.com → New → Blueprint
+# Deploy from: https://dashboard.render.com → New → Blueprint
+# For free-tier: Free Docker Web Service + Neon Postgres + Upstash Redis
+# + Cloudinary (see deployment guide).
 
 services:
   - type: web
@@ -13,17 +13,11 @@ services:
     dockerContext: .
     plan: starter
     healthCheckPath: /health
-    disk:
-      name: kitchenos-uploads
-      mountPath: /var/data
-      sizeGB: 2
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: "4000"
-      - key: UPLOAD_DIR
-        value: /var/data/uploads
       - key: DATABASE_URL
         fromDatabase:
           name: kitchenos-db
@@ -41,6 +35,12 @@ services:
       - key: PUBLIC_APP_URL
         sync: false
       - key: PUBLIC_API_URL
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
         sync: false
       - key: SMTP_HOST
         sync: false
