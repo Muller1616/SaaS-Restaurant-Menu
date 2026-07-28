@@ -3,9 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { env } from "../config/env.js";
 import { AppError } from "../middleware/error.js";
+import { fetchRemoteImageBuffer, isCloudinaryUrl } from "./cloudinary-media.js";
 
-/** Resolve a stored /uploads/payments/... URL to an absolute path under uploadDir. */
-export function resolvePaymentProofPath(screenshotUrl: string) {
+/** Resolve a legacy `/uploads/payments/...` path under uploadDir. */
+function resolveLegacyPaymentProofPath(screenshotUrl: string) {
   const marker = "/uploads/payments/";
   const idx = screenshotUrl.indexOf(marker);
   if (idx === -1) {
@@ -23,8 +24,35 @@ export function resolvePaymentProofPath(screenshotUrl: string) {
   return absolute;
 }
 
-export function sendPaymentProofFile(res: Response, screenshotUrl: string) {
-  const absolute = resolvePaymentProofPath(screenshotUrl);
+/**
+ * Stream a payment proof to the client after auth.
+ * Cloudinary URLs are fetched server-side so proofs stay behind the API.
+ * Legacy local paths remain supported during migration.
+ */
+export async function sendPaymentProofFile(
+  res: Response,
+  screenshotUrl: string,
+) {
+  if (isCloudinaryUrl(screenshotUrl) || /^https?:\/\//i.test(screenshotUrl)) {
+    const buffer = await fetchRemoteImageBuffer(screenshotUrl);
+    if (!buffer) {
+      throw new AppError(404, "Payment proof not found");
+    }
+    const lower = screenshotUrl.toLowerCase();
+    const type = lower.includes(".png")
+      ? "image/png"
+      : lower.includes(".webp")
+        ? "image/webp"
+        : lower.includes(".gif")
+          ? "image/gif"
+          : "image/jpeg";
+    res.setHeader("Content-Type", type);
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.send(buffer);
+    return;
+  }
+
+  const absolute = resolveLegacyPaymentProofPath(screenshotUrl);
   const ext = path.extname(absolute).toLowerCase();
   const type =
     ext === ".png"

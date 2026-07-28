@@ -275,7 +275,7 @@ export async function createMenuItem(
   tenantId: string,
   branchId: string,
   input: z.infer<typeof menuItemSchema>,
-  imageFilename?: string | null,
+  imageUrl?: string | null,
 ) {
   await assertItemLimit(branchId);
 
@@ -292,7 +292,7 @@ export async function createMenuItem(
       description: input.description || null,
       price: input.price,
       currency: input.currency || "ETB",
-      imageUrl: imageFilename ? `/uploads/menu/${imageFilename}` : null,
+      imageUrl: imageUrl || null,
       isAvailable: input.isAvailable,
       isFeatured: input.isFeatured,
       sortOrder: input.sortOrder ?? 0,
@@ -317,7 +317,7 @@ export async function updateMenuItem(
   branchId: string,
   itemId: string,
   input: z.infer<typeof menuItemSchema>,
-  imageFilename?: string | null,
+  imageUrl?: string | null,
 ) {
   const existing = await prisma.menuItem.findFirst({
     where: { id: itemId, branchId, deletedAt: null },
@@ -329,6 +329,7 @@ export async function updateMenuItem(
   });
   if (!category) throw new AppError(400, "Invalid category for this branch");
 
+  const previousImageUrl = existing.imageUrl;
   const item = await prisma.menuItem.update({
     where: { id: itemId },
     data: {
@@ -337,15 +338,18 @@ export async function updateMenuItem(
       description: input.description || null,
       price: input.price,
       currency: input.currency || "ETB",
-      ...(imageFilename
-        ? { imageUrl: `/uploads/menu/${imageFilename}` }
-        : {}),
+      ...(imageUrl ? { imageUrl } : {}),
       isAvailable: input.isAvailable,
       isFeatured: input.isFeatured,
       sortOrder: input.sortOrder ?? existing.sortOrder,
     },
     include: { category: true },
   });
+
+  if (imageUrl && previousImageUrl && previousImageUrl !== imageUrl) {
+    const { destroyCloudinaryUrl } = await import("../../lib/cloudinary-media.js");
+    await destroyCloudinaryUrl(previousImageUrl);
+  }
 
   await logActivity({
     userType: "TENANT",
@@ -373,6 +377,11 @@ export async function deleteMenuItem(
     where: { id: itemId },
     data: { deletedAt: new Date(), isAvailable: false },
   });
+
+  if (existing.imageUrl) {
+    const { destroyCloudinaryUrl } = await import("../../lib/cloudinary-media.js");
+    await destroyCloudinaryUrl(existing.imageUrl);
+  }
 
   await logActivity({
     userType: "TENANT",

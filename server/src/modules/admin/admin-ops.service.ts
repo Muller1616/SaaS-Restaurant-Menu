@@ -84,12 +84,16 @@ export async function getTenantSettings(tenantId: string) {
   );
 }
 
-/** Store restaurant logo from a device file upload (local path under /uploads/logos). */
+/** Store restaurant logo from a device upload (Cloudinary secure_url). */
 export async function updateTenantLogo(
   tenantId: string,
-  filename: string,
+  logoUrl: string,
 ) {
-  const logoUrl = `/uploads/logos/${filename}`;
+  const previous = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { logoUrl: true },
+  });
+
   const tenant = await prisma.tenant.update({
     where: { id: tenantId },
     data: { logoUrl },
@@ -99,6 +103,11 @@ export async function updateTenantLogo(
       logoUrl: true,
     },
   });
+
+  if (previous?.logoUrl && previous.logoUrl !== logoUrl) {
+    const { destroyCloudinaryUrl } = await import("../../lib/cloudinary-media.js");
+    await destroyCloudinaryUrl(previous.logoUrl);
+  }
 
   await logActivity({
     userType: "TENANT",
@@ -117,6 +126,11 @@ export async function updateTenantLogo(
 }
 
 export async function removeTenantLogo(tenantId: string) {
+  const previous = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { logoUrl: true },
+  });
+
   const tenant = await prisma.tenant.update({
     where: { id: tenantId },
     data: { logoUrl: null },
@@ -126,6 +140,11 @@ export async function removeTenantLogo(tenantId: string) {
       logoUrl: true,
     },
   });
+
+  if (previous?.logoUrl) {
+    const { destroyCloudinaryUrl } = await import("../../lib/cloudinary-media.js");
+    await destroyCloudinaryUrl(previous.logoUrl);
+  }
 
   await logActivity({
     userType: "TENANT",

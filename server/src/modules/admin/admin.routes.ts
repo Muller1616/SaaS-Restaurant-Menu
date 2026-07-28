@@ -211,7 +211,7 @@ adminRouter.get("/payments/:id/proof", async (req, res, next) => {
       select: { screenshotUrl: true },
     });
     if (!payment) throw new AppError(404, "Payment not found");
-    sendPaymentProofFile(res, payment.screenshotUrl);
+    await sendPaymentProofFile(res, payment.screenshotUrl);
   } catch (error) {
     next(error);
   }
@@ -227,7 +227,7 @@ adminRouter.get("/registrations/:id/payment-proof", async (req, res, next) => {
     if (!tenant?.registrationPaymentUrl) {
       throw new AppError(404, "Payment proof not found");
     }
-    sendPaymentProofFile(res, tenant.registrationPaymentUrl);
+    await sendPaymentProofFile(res, tenant.registrationPaymentUrl);
   } catch (error) {
     next(error);
   }

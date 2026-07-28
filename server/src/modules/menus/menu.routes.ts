@@ -9,7 +9,7 @@ import {
   type BranchAuthedRequest,
 } from "../../middleware/branch-context.js";
 import { AppError } from "../../middleware/error.js";
-import { optimizeRequestImage } from "../../middleware/optimize-upload.js";
+import { processAndUploadImage } from "../../middleware/optimize-upload.js";
 import { requirePasswordChanged } from "../../middleware/require-password-changed.js";
 import { menuUpload } from "../../middleware/upload.js";
 import {
@@ -43,7 +43,7 @@ function handleUpload(
         new AppError(400, err instanceof Error ? err.message : "Upload failed"),
       );
     }
-    void optimizeRequestImage(req, "menu")
+    void processAndUploadImage(req, "menu")
       .then(() => next())
       .catch((optimizeErr) =>
         next(
@@ -138,7 +138,7 @@ menuRouter.post(
         req.user!.sub,
         req.branchId!,
         parsed.data,
-        req.file?.filename ?? null,
+        req.uploadedMedia?.url ?? null,
       );
       res.status(201).json({ success: true, data: item });
     } catch (error) {
@@ -162,7 +162,7 @@ menuRouter.patch(
         req.branchId!,
         String(req.params.id),
         parsed.data,
-        req.file?.filename ?? null,
+        req.uploadedMedia?.url ?? null,
       );
       res.json({ success: true, data: item });
     } catch (error) {
