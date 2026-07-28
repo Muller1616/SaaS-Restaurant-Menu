@@ -46,6 +46,10 @@ services:
         sync: false
       - key: SMTP_PORT
         sync: false
+      - key: SMTP_SECURE
+        sync: false
+      - key: SMTP_TIMEOUT_MS
+        sync: false
       - key: SMTP_USER
         sync: false
       - key: SMTP_PASS
