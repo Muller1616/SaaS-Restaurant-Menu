@@ -52,7 +52,8 @@ Dev seed does **not** invent passwords when those vars are unset.
 | `CLIENT_URL` / `PUBLIC_APP_URL` | Vercel HTTPS origin |
 | `PUBLIC_API_URL` | This API’s HTTPS origin (legacy media URL fallback) |
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Image hosting |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Real mail provider |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Real mail provider (works on **paid** Render; free tier blocks SMTP) |
+| `RESEND_API_KEY` (+ optional `RESEND_FROM`) | **Recommended on Render free tier** — sends over HTTPS (ports 25/465/587 are blocked) |
 
 Optional first-time admin bootstrap (never on every deploy):
 

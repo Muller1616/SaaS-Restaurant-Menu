@@ -68,6 +68,19 @@ export function createApp() {
 
   // Media is served from Cloudinary. Legacy /uploads/* local static hosting removed.
 
+  // Render / load balancers sometimes probe `/` — avoid noisy 404s.
+  app.get("/", (_req, res) => {
+    res.status(200).json({
+      success: true,
+      service: "KitchenOS API",
+      status: "ok",
+      health: "/health",
+    });
+  });
+  app.head("/", (_req, res) => {
+    res.status(200).end();
+  });
+
   app.use("/api/v1/health", healthRouter);
   // Convenience alias for probes that hit /health instead of /api/v1/health
   app.use("/health", healthRouter);

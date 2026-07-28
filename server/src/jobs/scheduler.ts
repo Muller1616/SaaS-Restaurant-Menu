@@ -30,14 +30,24 @@ export function startSubscriptionAlertScheduler() {
         logger.info("Subscription retention purge", retention);
       }
 
-      if (await shouldRunAutomaticBackup()) {
-        const backup = await runDatabaseBackup();
-        logger.info("Database backup complete", {
-          fileName: backup.fileName,
-          sizeBytes: backup.sizeBytes,
-          method: backup.method,
-          pruned: backup.pruned,
-        });
+      if (env.enableLocalDbBackup && (await shouldRunAutomaticBackup())) {
+        try {
+          const backup = await runDatabaseBackup();
+          logger.info("Database backup complete", {
+            fileName: backup.fileName,
+            sizeBytes: backup.sizeBytes,
+            method: backup.method,
+            pruned: backup.pruned,
+          });
+        } catch (backupError) {
+          // Neon/Render has no local Docker Postgres — don't fail alert jobs.
+          logger.warn("Automatic database backup skipped", {
+            error:
+              backupError instanceof Error
+                ? backupError.message
+                : String(backupError),
+          });
+        }
       }
     } catch (error) {
       logger.warn("Subscription jobs failed", { error: String(error) });

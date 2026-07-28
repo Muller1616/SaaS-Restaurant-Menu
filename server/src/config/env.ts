@@ -191,6 +191,29 @@ export const env = {
     /** Max wait for verify/sendMail before failing the HTTP request. */
     timeoutMs: smtpTimeoutMs,
   },
+  /**
+   * Resend HTTPS API — preferred on Render free tier (SMTP ports 25/465/587 are blocked).
+   * When set, sendEmail uses https://api.resend.com instead of SMTP.
+   */
+  resendApiKey: (() => {
+    const key = (process.env.RESEND_API_KEY ?? "").trim();
+    return key || null;
+  })(),
+  /** Optional override for Resend "from"; defaults to SMTP_FROM. */
+  resendFrom: (() => {
+    const from = (process.env.RESEND_FROM ?? "").trim();
+    return from || null;
+  })(),
+  /**
+   * When false, the scheduler skips local pg_dump backups (Neon/Render have no Docker Postgres).
+   * Default: enabled in development, disabled in production.
+   */
+  enableLocalDbBackup: (() => {
+    const raw = (process.env.ENABLE_LOCAL_DB_BACKUP ?? "").trim().toLowerCase();
+    if (raw === "true" || raw === "1") return true;
+    if (raw === "false" || raw === "0") return false;
+    return !isProduction;
+  })(),
   /** How often FR-8.1 subscription alert job runs (minutes). */
   subscriptionAlertsIntervalMinutes: Number(
     process.env.SUBSCRIPTION_ALERTS_INTERVAL_MINUTES ?? 60,

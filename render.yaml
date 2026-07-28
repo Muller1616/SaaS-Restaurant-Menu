@@ -56,6 +56,13 @@ services:
         sync: false
       - key: SMTP_FROM
         sync: false
+      # Preferred on Render free tier (SMTP ports are blocked):
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
+      - key: ENABLE_LOCAL_DB_BACKUP
+        value: "false"
 
   - type: redis
     name: kitchenos-redis
