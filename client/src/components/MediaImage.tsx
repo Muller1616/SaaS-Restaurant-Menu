@@ -9,7 +9,7 @@ type Props = {
   cacheKey?: string | number;
 };
 
-/** Renders upload/QR media with production-safe absolute URLs. */
+/** Renders Cloudinary or legacy media with production-safe absolute URLs. */
 export function MediaImage({ src, alt, className = "", cacheKey }: Props) {
   const [failed, setFailed] = useState(false);
   const resolved = assetUrl(src);

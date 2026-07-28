@@ -21,7 +21,7 @@ type QrPayload = {
   publicQrId: string;
   menuUrl: string;
   qrCodeUrl: string;
-  qrSvgUrl: string;
+  qrSvgUrl: string | null;
   qrCreatedAt?: string;
   qrRegeneratedAt?: string | null;
   subscriptionStatus: string | null;
