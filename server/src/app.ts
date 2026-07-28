@@ -3,8 +3,6 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
-import fs from "node:fs";
-import path from "node:path";
 import { env } from "./config/env.js";
 import { csrfProtect } from "./middleware/csrf.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
@@ -31,14 +29,7 @@ export function createApp() {
     app.set("trust proxy", 1);
   }
 
-  fs.mkdirSync(env.uploadDir, { recursive: true });
-  fs.mkdirSync(path.join(env.uploadDir, "payments"), { recursive: true });
-  fs.mkdirSync(path.join(env.uploadDir, "menu"), { recursive: true });
-  fs.mkdirSync(path.join(env.uploadDir, "logos"), { recursive: true });
-  fs.mkdirSync(path.join(env.uploadDir, "qr"), { recursive: true });
-
-  // Allow Vercel (and other frontends) to embed /uploads images via <img>.
-  // Default helmet CORP "same-origin" blocks cross-origin image display.
+  // Allow Vercel (and other frontends) to embed Cloudinary (and legacy) images via <img>.
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -75,31 +66,7 @@ export function createApp() {
   app.use(express.json({ limit: "2mb" }));
   app.use(express.urlencoded({ extended: true }));
 
-  // Public media only — payment proofs are served via authenticated API routes
-  const publicStatic = {
-    setHeaders(res: express.Response) {
-      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-      res.setHeader("Cache-Control", "public, max-age=86400");
-    },
-  };
-  app.use(
-    "/uploads/logos",
-    express.static(path.join(env.uploadDir, "logos"), publicStatic),
-  );
-  app.use(
-    "/uploads/menu",
-    express.static(path.join(env.uploadDir, "menu"), publicStatic),
-  );
-  app.use(
-    "/uploads/qr",
-    express.static(path.join(env.uploadDir, "qr"), publicStatic),
-  );
-  app.use("/uploads/payments", (_req, res) => {
-    res.status(401).json({
-      success: false,
-      message: "Payment proof requires authentication",
-    });
-  });
+  // Media is served from Cloudinary. Legacy /uploads/* local static hosting removed.
 
   app.use("/api/v1/health", healthRouter);
   // Convenience alias for probes that hit /health instead of /api/v1/health

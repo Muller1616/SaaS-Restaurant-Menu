@@ -126,6 +126,17 @@ if (isProduction) {
   assertProductionDatabaseUrl(databaseUrl);
 }
 
+const cloudinaryCloudName = (process.env.CLOUDINARY_CLOUD_NAME ?? "").trim();
+const cloudinaryApiKey = (process.env.CLOUDINARY_API_KEY ?? "").trim();
+const cloudinaryApiSecret = (process.env.CLOUDINARY_API_SECRET ?? "").trim();
+if (isProduction) {
+  if (!cloudinaryCloudName || !cloudinaryApiKey || !cloudinaryApiSecret) {
+    throw new Error(
+      "CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET are required in production",
+    );
+  }
+}
+
 export const env = {
   nodeEnv,
   isProduction,
@@ -139,10 +150,23 @@ export const env = {
   publicApiUrl,
   /** Hours until an approval activation link expires. */
   activationTokenHours: Number(process.env.ACTIVATION_TOKEN_HOURS ?? 24),
+  /**
+   * Legacy local upload root — kept only for reading old `/uploads/...`
+   * paths during migration. New uploads go to Cloudinary.
+   */
   uploadDir: path.resolve(
     path.join(__dirname, "../.."),
     process.env.UPLOAD_DIR ?? "uploads",
   ),
+  cloudinary: {
+    cloudName: cloudinaryCloudName,
+    apiKey: cloudinaryApiKey,
+    apiSecret: cloudinaryApiSecret,
+    /** True when all three Cloudinary credentials are present. */
+    enabled: Boolean(
+      cloudinaryCloudName && cloudinaryApiKey && cloudinaryApiSecret,
+    ),
+  },
   smtp: {
     host: smtpHost,
     port: Number(process.env.SMTP_PORT ?? 1025),
