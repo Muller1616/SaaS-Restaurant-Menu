@@ -215,7 +215,7 @@ export async function submitRenewalPayment(input: {
   paymentMethod: "BANK_TRANSFER" | "TELEBIRR" | "CASH";
   referenceNumber: string;
   notes?: string;
-  screenshotFilename: string;
+  screenshotUrl: string;
 }) {
   const branch = await prisma.branch.findFirst({
     where: { id: input.branchId, tenantId: input.tenantId, deletedAt: null },
@@ -249,7 +249,7 @@ export async function submitRenewalPayment(input: {
   }
 
   const amount = Number(plan.priceMonthly) * input.durationMonths;
-  const screenshotUrl = `/uploads/payments/${input.screenshotFilename}`;
+  const screenshotUrl = input.screenshotUrl;
 
   const payment = await prisma.payment.create({
     data: {

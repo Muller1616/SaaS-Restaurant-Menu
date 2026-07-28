@@ -12,7 +12,7 @@ import { requirePasswordChanged } from "../../middleware/require-password-change
 import {
   buildPrintHtml,
   getBranchQr,
-  getQrFilePath,
+  getQrDownloadPayload,
   regenerateBranchQr,
   updateBranchQrStyle,
   updateQrStyleSchema,
@@ -71,13 +71,17 @@ qrRouter.get("/download", async (req: BranchAuthedRequest, res, next) => {
       throw new AppError(400, "Format must be png or svg");
     }
 
-    const file = await getQrFilePath(req.user!.sub, req.branchId!, format);
+    const file = await getQrDownloadPayload(
+      req.user!.sub,
+      req.branchId!,
+      format,
+    );
     res.setHeader("Content-Type", file.contentType);
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="${file.fileName}"`,
     );
-    res.sendFile(file.filePath);
+    res.send(file.buffer);
   } catch (error) {
     next(error);
   }

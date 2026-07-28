@@ -1,5 +1,3 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import sharp from "sharp";
 
 export type ImagePreset = "logo" | "menu" | "payment";
@@ -11,31 +9,19 @@ const PRESETS: Record<ImagePreset, { maxWidth: number; quality: number }> = {
 };
 
 /**
- * SRS §6.1 — auto-resize and convert uploads to WebP.
- * Replaces the original multer file with an optimized .webp sibling.
+ * SRS §6.1 — auto-resize and convert uploads to WebP in memory.
  */
-export async function optimizeUploadedImage(
-  absolutePath: string,
+export async function optimizeImageBuffer(
+  input: Buffer,
   preset: ImagePreset,
-): Promise<string> {
+): Promise<Buffer> {
   const config = PRESETS[preset];
-  const dir = path.dirname(absolutePath);
-  const base = path.basename(absolutePath, path.extname(absolutePath));
-  const outName = `${base}.webp`;
-  const outPath = path.join(dir, outName);
-
-  await sharp(absolutePath)
+  return sharp(input)
     .rotate()
     .resize({
       width: config.maxWidth,
       withoutEnlargement: true,
     })
     .webp({ quality: config.quality })
-    .toFile(outPath);
-
-  if (outPath !== absolutePath) {
-    await fs.unlink(absolutePath).catch(() => undefined);
-  }
-
-  return outName;
+    .toBuffer();
 }

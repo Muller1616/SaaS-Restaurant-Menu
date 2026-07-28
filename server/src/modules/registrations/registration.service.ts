@@ -33,7 +33,7 @@ export async function listActivePlans() {
 
 export async function createRegistration(
   input: RegistrationInput,
-  paymentScreenshotPath?: string | null,
+  paymentScreenshotUrl?: string | null,
 ) {
   const email = input.email.toLowerCase().trim();
 
@@ -50,7 +50,7 @@ export async function createRegistration(
   }
 
   const isPaid = Number(plan.priceMonthly) > 0;
-  if (isPaid && !paymentScreenshotPath) {
+  if (isPaid && !paymentScreenshotUrl) {
     throw new AppError(400, "Payment screenshot is required for paid plans");
   }
   if (isPaid && !input.referenceNumber?.trim()) {
@@ -61,9 +61,7 @@ export async function createRegistration(
   }
 
   const slug = await uniqueTenantSlug(input.businessName);
-  const screenshotUrl = paymentScreenshotPath
-    ? `/uploads/payments/${paymentScreenshotPath}`
-    : null;
+  const screenshotUrl = paymentScreenshotUrl || null;
 
   const tenant = await prisma.$transaction(async (tx) => {
     const created = await tx.tenant.create({

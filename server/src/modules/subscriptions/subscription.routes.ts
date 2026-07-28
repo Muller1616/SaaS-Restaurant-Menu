@@ -8,7 +8,7 @@ import {
   type BranchAuthedRequest,
 } from "../../middleware/branch-context.js";
 import { AppError } from "../../middleware/error.js";
-import { optimizeRequestImage } from "../../middleware/optimize-upload.js";
+import { processAndUploadImage } from "../../middleware/optimize-upload.js";
 import { requirePasswordChanged } from "../../middleware/require-password-changed.js";
 import { paymentUpload } from "../../middleware/upload.js";
 import { sendPaymentProofFile } from "../../lib/payment-proof.js";
@@ -81,10 +81,14 @@ subscriptionRouter.post(
           new AppError(400, err instanceof Error ? err.message : "Upload failed"),
         );
       }
-      void optimizeRequestImage(req, "payment")
+      void processAndUploadImage(req, "payment")
         .then(() => next())
-        .catch(() =>
-          next(new AppError(400, "Could not process payment screenshot")),
+        .catch((error) =>
+          next(
+            error instanceof AppError
+              ? error
+              : new AppError(400, "Could not process payment screenshot"),
+          ),
         );
     });
   },
@@ -94,7 +98,7 @@ subscriptionRouter.post(
       if (!parsed.success) {
         throw new AppError(400, "Please check the form and try again", parsed.error.flatten());
       }
-      if (!req.file?.filename) {
+      if (!req.uploadedMedia?.url) {
         throw new AppError(400, "Payment screenshot is required");
       }
 
@@ -105,7 +109,7 @@ subscriptionRouter.post(
         paymentMethod: parsed.data.paymentMethod,
         referenceNumber: parsed.data.referenceNumber,
         notes: parsed.data.notes,
-        screenshotFilename: req.file.filename,
+        screenshotUrl: req.uploadedMedia.url,
       });
 
       res.status(201).json({ success: true, data: payment });
@@ -136,7 +140,7 @@ tenantPaymentsRouter.get("/:id/proof", async (req: BranchAuthedRequest, res, nex
       select: { screenshotUrl: true },
     });
     if (!payment) throw new AppError(404, "Payment not found");
-    sendPaymentProofFile(res, payment.screenshotUrl);
+    await sendPaymentProofFile(res, payment.screenshotUrl);
   } catch (error) {
     next(error);
   }

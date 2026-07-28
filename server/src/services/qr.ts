@@ -1,8 +1,6 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import QRCode from "qrcode";
 import sharp from "sharp";
-import { env } from "../config/env.js";
+import { uploadImageBuffer } from "../lib/cloudinary-media.js";
 import { buildPublicQrUrl } from "./qr-url.js";
 
 export const DEFAULT_QR_FG = "#0E1412";
@@ -17,21 +15,20 @@ export function normalizeHexColor(value: string | null | undefined, fallback: st
   return trimmed.toUpperCase();
 }
 
-export function resolveUploadAbsolutePath(publicUrl: string | null | undefined) {
-  if (!publicUrl) return null;
-  const cleaned = publicUrl.replace(/^\/uploads\//, "").replace(/^\//, "");
-  if (!cleaned || cleaned.includes("..")) return null;
-  return path.join(env.uploadDir, cleaned);
-}
-
-async function overlayLogo(pngPath: string, logoPath: string) {
+async function overlayLogoOnPng(
+  pngBuffer: Buffer,
+  logoBuffer: Buffer,
+): Promise<Buffer> {
   const size = 1024;
   const logoBox = Math.round(size * 0.22);
   const pad = Math.round(logoBox * 0.12);
   const inner = logoBox - pad * 2;
 
-  const logoBuf = await sharp(logoPath)
-    .resize(inner, inner, { fit: "contain", background: { r: 255, g: 255, b: 255, alpha: 0 } })
+  const logoBuf = await sharp(logoBuffer)
+    .resize(inner, inner, {
+      fit: "contain",
+      background: { r: 255, g: 255, b: 255, alpha: 0 },
+    })
     .png()
     .toBuffer();
 
@@ -50,33 +47,26 @@ async function overlayLogo(pngPath: string, logoPath: string) {
   const left = Math.round((size - logoBox) / 2);
   const top = left;
 
-  await sharp(pngPath)
+  return sharp(pngBuffer)
     .composite([{ input: plate, left, top }])
     .png()
-    .toFile(pngPath + ".tmp");
-
-  await fs.rename(pngPath + ".tmp", pngPath);
+    .toBuffer();
 }
 
+/**
+ * Generate a branch QR as PNG (uploaded to Cloudinary) + SVG string (on demand).
+ */
 export async function generateBranchQr(input: {
   publicQrId: string;
   branchId: string;
   fgColor?: string | null;
   bgColor?: string | null;
-  logoPath?: string | null;
+  logoBuffer?: Buffer | null;
 }) {
   const menuUrl = buildPublicQrUrl(input.publicQrId);
-  const dir = path.join(env.uploadDir, "qr");
-  await fs.mkdir(dir, { recursive: true });
-
   const dark = normalizeHexColor(input.fgColor, DEFAULT_QR_FG);
   const light = normalizeHexColor(input.bgColor, DEFAULT_QR_BG);
-  const useLogo = Boolean(input.logoPath);
-
-  const pngName = `${input.branchId}.png`;
-  const svgName = `${input.branchId}.svg`;
-  const pngPath = path.join(dir, pngName);
-  const svgPath = path.join(dir, svgName);
+  const useLogo = Boolean(input.logoBuffer?.length);
 
   const qrOptions = {
     width: 1024,
@@ -85,33 +75,34 @@ export async function generateBranchQr(input: {
     color: { dark, light },
   };
 
-  await QRCode.toFile(pngPath, menuUrl, {
+  let pngBuffer = await QRCode.toBuffer(menuUrl, {
     type: "png",
     ...qrOptions,
   });
 
-  if (input.logoPath) {
+  if (input.logoBuffer?.length) {
     try {
-      await fs.access(input.logoPath);
-      await overlayLogo(pngPath, input.logoPath);
+      pngBuffer = await overlayLogoOnPng(pngBuffer, input.logoBuffer);
     } catch {
-      // Logo missing — keep plain QR
+      // Logo overlay failed — keep plain QR
     }
   }
+
+  const uploaded = await uploadImageBuffer(pngBuffer, "qr", {
+    publicId: `kitchenos/qr/${input.branchId}`,
+    format: "png",
+  });
 
   const svg = await QRCode.toString(menuUrl, {
     type: "svg",
     ...qrOptions,
   });
-  await fs.writeFile(svgPath, svg, "utf8");
 
   return {
     menuUrl,
     publicQrId: input.publicQrId,
-    qrCodeUrl: `/uploads/qr/${pngName}`,
-    qrSvgUrl: `/uploads/qr/${svgName}`,
-    pngPath,
-    svgPath,
+    qrCodeUrl: uploaded.url,
+    qrSvg: svg,
     fgColor: dark,
     bgColor: light,
     usedLogo: useLogo,

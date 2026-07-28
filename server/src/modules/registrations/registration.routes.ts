@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { AppError } from "../../middleware/error.js";
 import { createRateLimiter } from "../../lib/rate-limit.js";
-import { optimizeRequestImage } from "../../middleware/optimize-upload.js";
+import { processAndUploadImage } from "../../middleware/optimize-upload.js";
 import { paymentUpload } from "../../middleware/upload.js";
 import { recordPublicMenuView } from "../analytics/analytics.service.js";
 import { registrationSchema } from "../registrations/registration.schemas.js";
@@ -126,10 +126,14 @@ publicRouter.post(
         }
         return next(new AppError(400, "Upload failed"));
       }
-      void optimizeRequestImage(req, "payment")
+      void processAndUploadImage(req, "payment")
         .then(() => next())
-        .catch(() =>
-          next(new AppError(400, "Could not process payment screenshot")),
+        .catch((error) =>
+          next(
+            error instanceof AppError
+              ? error
+              : new AppError(400, "Could not process payment screenshot"),
+          ),
         );
     });
   },
@@ -142,7 +146,7 @@ publicRouter.post(
 
       const result = await createRegistration(
         parsed.data,
-        req.file?.filename ?? null,
+        req.uploadedMedia?.url ?? null,
       );
 
       res.status(201).json({ success: true, data: result });

@@ -5,7 +5,7 @@ import {
   type AuthedRequest,
 } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/error.js";
-import { optimizeRequestImage } from "../../middleware/optimize-upload.js";
+import { processAndUploadImage } from "../../middleware/optimize-upload.js";
 import { requirePasswordChanged } from "../../middleware/require-password-changed.js";
 import { logoUpload } from "../../middleware/upload.js";
 import {
@@ -63,17 +63,23 @@ tenantSettingsRouter.post(
           new AppError(400, err instanceof Error ? err.message : "Upload failed"),
         );
       }
-      void optimizeRequestImage(req, "logo")
+      void processAndUploadImage(req, "logo")
         .then(() => next())
-        .catch(() => next(new AppError(400, "Could not process logo image")));
+        .catch((error) =>
+          next(
+            error instanceof AppError
+              ? error
+              : new AppError(400, "Could not process logo image"),
+          ),
+        );
     });
   },
   async (req: AuthedRequest, res, next) => {
     try {
-      if (!req.file?.filename) {
+      if (!req.uploadedMedia?.url) {
         throw new AppError(400, "Choose a logo image from your device");
       }
-      const data = await updateTenantLogo(req.user!.sub, req.file.filename);
+      const data = await updateTenantLogo(req.user!.sub, req.uploadedMedia.url);
       res.json({ success: true, data });
     } catch (error) {
       next(error);

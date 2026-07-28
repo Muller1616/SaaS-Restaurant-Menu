@@ -1,8 +1,10 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import { z } from "zod";
-import { env } from "../../config/env.js";
 import { logActivity } from "../../lib/activity-log.js";
+import {
+  destroyCloudinaryUrl,
+  fetchRemoteImageBuffer,
+  isCloudinaryUrl,
+} from "../../lib/cloudinary-media.js";
 import {
   invalidateCachesForBranch,
   invalidatePublicMenuCache,
@@ -16,10 +18,9 @@ import {
   DEFAULT_QR_FG,
   generateBranchQr,
   normalizeHexColor,
-  resolveUploadAbsolutePath,
 } from "../../services/qr.js";
 import { uniquePublicQrId } from "../../lib/slug.js";
-import { recordIssuedQrToken, rotateBranchPublicQrToken } from "./branch-qr-token.js";
+import { rotateBranchPublicQrToken } from "./branch-qr-token.js";
 
 const hexColor = z
   .string()
@@ -67,6 +68,18 @@ async function getBranchForTenant(tenantId: string, branchId: string) {
   return branch;
 }
 
+async function logoBufferForBranch(branch: {
+  qrUseLogo: boolean;
+  tenant: { logoUrl: string | null };
+  subscription: { plan: { features: unknown } } | null;
+}) {
+  const canCustomize = planHasCustomQr(branch.subscription?.plan.features);
+  if (!canCustomize || !branch.qrUseLogo || !branch.tenant.logoUrl) {
+    return null;
+  }
+  return fetchRemoteImageBuffer(branch.tenant.logoUrl);
+}
+
 function styleForGeneration(branch: {
   qrFgColor: string | null;
   qrBgColor: string | null;
@@ -79,7 +92,6 @@ function styleForGeneration(branch: {
     return {
       fgColor: DEFAULT_QR_FG,
       bgColor: DEFAULT_QR_BG,
-      logoPath: null as string | null,
       canCustomize: false,
     };
   }
@@ -87,9 +99,6 @@ function styleForGeneration(branch: {
   return {
     fgColor: normalizeHexColor(branch.qrFgColor, DEFAULT_QR_FG),
     bgColor: normalizeHexColor(branch.qrBgColor, DEFAULT_QR_BG),
-    logoPath: branch.qrUseLogo
-      ? resolveUploadAbsolutePath(branch.tenant.logoUrl)
-      : null,
     canCustomize: true,
   };
 }
@@ -98,6 +107,7 @@ async function writeQrForBranch(
   branch: {
     id: string;
     publicQrId: string;
+    qrCodeUrl: string | null;
     qrFgColor: string | null;
     qrBgColor: string | null;
     qrUseLogo: boolean;
@@ -111,15 +121,37 @@ async function writeQrForBranch(
     ? await uniquePublicQrId()
     : branch.publicQrId;
 
+  const logoBuffer = await logoBufferForBranch(branch);
+  const previousUrl = branch.qrCodeUrl;
+
   const generated = await generateBranchQr({
     publicQrId,
     branchId: branch.id,
     fgColor: style.fgColor,
     bgColor: style.bgColor,
-    logoPath: style.logoPath,
+    logoBuffer,
   });
 
+  // Overwrite uses the same public_id (`kitchenos/qr/{branchId}`); destroy only
+  // when replacing a different legacy/non-overwrite URL.
+  if (
+    previousUrl &&
+    previousUrl !== generated.qrCodeUrl &&
+    !previousUrl.includes(`kitchenos/qr/${branch.id}`)
+  ) {
+    await destroyCloudinaryUrl(previousUrl);
+  }
+
   return { ...generated, publicQrId };
+}
+
+function needsQrRegeneration(qrCodeUrl: string | null | undefined) {
+  if (!qrCodeUrl) return true;
+  // Legacy local paths must be regenerated onto Cloudinary.
+  if (!isCloudinaryUrl(qrCodeUrl) && !/^https?:\/\//i.test(qrCodeUrl)) {
+    return true;
+  }
+  return false;
 }
 
 export async function getBranchQr(tenantId: string, branchId: string) {
@@ -128,32 +160,12 @@ export async function getBranchQr(tenantId: string, branchId: string) {
   const canCustomize = planHasCustomQr(branch.subscription?.plan.features);
 
   let qrCodeUrl = branch.qrCodeUrl;
-  let qrSvgUrl = `/uploads/qr/${branch.id}.svg`;
+  let qrSvg: string | null = null;
 
-  const pngPath = path.join(env.uploadDir, "qr", `${branch.id}.png`);
-  const svgPath = path.join(env.uploadDir, "qr", `${branch.id}.svg`);
-
-  try {
-    await fs.access(pngPath);
-  } catch {
+  if (needsQrRegeneration(qrCodeUrl)) {
     const generated = await writeQrForBranch(branch);
     qrCodeUrl = generated.qrCodeUrl;
-    qrSvgUrl = generated.qrSvgUrl;
-    await prisma.branch.update({
-      where: { id: branch.id },
-      data: {
-        qrCodeUrl,
-        publicQrId: generated.publicQrId,
-      },
-    });
-  }
-
-  try {
-    await fs.access(svgPath);
-  } catch {
-    const generated = await writeQrForBranch(branch);
-    qrCodeUrl = generated.qrCodeUrl;
-    qrSvgUrl = generated.qrSvgUrl;
+    qrSvg = generated.qrSvg;
     await prisma.branch.update({
       where: { id: branch.id },
       data: {
@@ -173,8 +185,9 @@ export async function getBranchQr(tenantId: string, branchId: string) {
     branchSlug: branch.slug,
     publicQrId: branch.publicQrId,
     menuUrl,
-    qrCodeUrl: toPublicMediaUrl(qrCodeUrl ?? `/uploads/qr/${branch.id}.png`)!,
-    qrSvgUrl: toPublicMediaUrl(qrSvgUrl)!,
+    qrCodeUrl: toPublicMediaUrl(qrCodeUrl)!,
+    qrSvgUrl: null as string | null,
+    qrSvg,
     qrCreatedAt: branch.qrCreatedAt,
     qrRegeneratedAt: branch.qrRegeneratedAt,
     subscriptionStatus: branch.subscription?.status ?? null,
@@ -308,22 +321,39 @@ export async function updateBranchQrStyle(
   return getBranchQr(tenantId, branchId);
 }
 
-export async function getQrFilePath(
+export async function getQrDownloadPayload(
   tenantId: string,
   branchId: string,
   format: "png" | "svg",
 ) {
-  await getBranchQr(tenantId, branchId);
-  const filePath = path.join(env.uploadDir, "qr", `${branchId}.${format}`);
-  try {
-    await fs.access(filePath);
-  } catch {
+  const data = await getBranchQr(tenantId, branchId);
+
+  if (format === "svg") {
+    const branch = await getBranchForTenant(tenantId, branchId);
+    const style = styleForGeneration(branch);
+    const QRCode = (await import("qrcode")).default;
+    const svg = await QRCode.toString(data.menuUrl, {
+      type: "svg",
+      width: 1024,
+      margin: 2,
+      errorCorrectionLevel: "M",
+      color: { dark: style.fgColor, light: style.bgColor },
+    });
+    return {
+      buffer: Buffer.from(svg, "utf8"),
+      fileName: `${branchId}-kitchenos-qr.svg`,
+      contentType: "image/svg+xml",
+    };
+  }
+
+  const buffer = await fetchRemoteImageBuffer(data.qrCodeUrl);
+  if (!buffer) {
     throw new AppError(404, "QR file not found");
   }
   return {
-    filePath,
-    fileName: `${branchId}-kitchenos-qr.${format}`,
-    contentType: format === "png" ? "image/png" : "image/svg+xml",
+    buffer,
+    fileName: `${branchId}-kitchenos-qr.png`,
+    contentType: "image/png",
   };
 }
 
@@ -343,7 +373,7 @@ export function buildPrintHtml(input: {
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>${input.businessName} — QR Menu</title>
+  <title>${escapeHtml(input.businessName)} — QR Menu</title>
   <style>
     @page { size: A4; margin: 18mm; }
     * { box-sizing: border-box; }
