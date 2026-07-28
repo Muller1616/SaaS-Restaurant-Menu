@@ -1,11 +1,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import axios from "axios";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { z } from "zod";
 import { api, type ApiSuccess } from "../../lib/api";
 import { BackButton } from "../../components/BackButton";
+import { getUserFacingError } from "../../lib/user-facing-error";
 
 const schema = z.object({
   email: z.email("Enter a valid email"),
@@ -34,9 +34,7 @@ export function TenantForgotPasswordPage() {
       setDone(data.data.message);
     } catch (error) {
       setError("root", {
-        message: axios.isAxiosError(error)
-          ? (error.response?.data?.message as string) || "Request failed"
-          : "Request failed",
+        message: getUserFacingError(error, "Request failed"),
       });
     }
   }

@@ -11,6 +11,16 @@ const CODE_MESSAGES: Record<string, string> = {
   TENANT_INACTIVE: "This restaurant account is not active.",
 };
 
+function isTimeoutError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false;
+  const code = String(error.code ?? "");
+  return (
+    code === "ECONNABORTED" ||
+    code === "ETIMEDOUT" ||
+    /timeout/i.test(error.message)
+  );
+}
+
 /**
  * Map API / network failures to short user-facing copy.
  * Never surfaces stack traces, Prisma codes, or raw Axios internals.
@@ -25,6 +35,10 @@ export function getUserFacingError(
       return fallback;
     }
     return fallback;
+  }
+
+  if (isTimeoutError(error)) {
+    return "The request timed out. Please try again.";
   }
 
   if (!error.response) {
@@ -56,6 +70,9 @@ export function getUserFacingError(
   if (status === 404) return "We couldn’t find what you were looking for.";
   if (status === 409) return "That conflicts with existing data. Refresh and try again.";
   if (status === 429) return "Too many attempts. Please wait and try again.";
+  if (status === 502) {
+    return apiMessage || "Email service is unavailable. Please try again shortly.";
+  }
   if (status >= 500) return "The server had a problem. Please try again shortly.";
 
   return fallback;

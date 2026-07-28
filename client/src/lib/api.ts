@@ -13,11 +13,15 @@ import {
 
 export const CSRF_HEADER = "X-CSRF-Token";
 
+/** Never leave auth UI spinners waiting forever (Render cold start + SMTP). */
+export const API_TIMEOUT_MS = 30_000;
+
 const apiBase = getApiBaseUrl();
 
 export const api = axios.create({
   baseURL: apiBase,
   withCredentials: true,
+  timeout: API_TIMEOUT_MS,
   headers: {
     "Content-Type": "application/json",
   },
@@ -30,7 +34,10 @@ async function fetchCsrfToken(): Promise<string> {
   const { data } = await axios.get<{
     success: true;
     data: { csrfToken: string };
-  }>(`${apiBase}/auth/csrf`, { withCredentials: true });
+  }>(`${apiBase}/auth/csrf`, {
+    withCredentials: true,
+    timeout: API_TIMEOUT_MS,
+  });
   csrfToken = data.data.csrfToken;
   return csrfToken;
 }

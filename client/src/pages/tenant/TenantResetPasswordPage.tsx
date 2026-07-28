@@ -1,5 +1,4 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import axios from "axios";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
@@ -7,6 +6,7 @@ import { BackButton } from "../../components/BackButton";
 import { PasswordRequirements } from "../../components/PasswordRequirements";
 import { api } from "../../lib/api";
 import { strongPasswordSchema } from "../../lib/password-policy";
+import { getUserFacingError } from "../../lib/user-facing-error";
 
 const schema = z
   .object({
@@ -55,9 +55,7 @@ export function TenantResetPasswordPage() {
       navigate("/tenant/login", { replace: true });
     } catch (error) {
       setError("root", {
-        message: axios.isAxiosError(error)
-          ? (error.response?.data?.message as string) || "Reset failed"
-          : "Reset failed",
+        message: getUserFacingError(error, "Reset failed"),
       });
     }
   }

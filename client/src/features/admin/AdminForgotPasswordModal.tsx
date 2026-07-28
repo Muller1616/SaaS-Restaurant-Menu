@@ -1,12 +1,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import axios from "axios";
 import { useEffect, useId, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { PasswordRequirements } from "../../components/PasswordRequirements";
 import { api, type ApiSuccess } from "../../lib/api";
 import { strongPasswordSchema } from "../../lib/password-policy";
+import { getUserFacingError } from "../../lib/user-facing-error";
 
 type Step = "email" | "otp" | "password" | "done";
 
@@ -137,6 +137,9 @@ export function AdminForgotPasswordModal({
       >("/auth/admin/forgot-password", values);
       return { ...data.data, email: values.email };
     },
+    onMutate: () => {
+      setError(null);
+    },
     onSuccess: (data) => {
       setEmail(data.email);
       setOtpExpiresAt(Date.now() + data.expiresInSeconds * 1000);
@@ -146,11 +149,7 @@ export function AdminForgotPasswordModal({
       otpForm.reset({ otp: "" });
     },
     onError: (err) => {
-      setError(
-        axios.isAxiosError(err)
-          ? (err.response?.data?.message as string) || "Could not send code"
-          : "Could not send code",
-      );
+      setError(getUserFacingError(err, "Could not send code"));
     },
   });
 
@@ -165,6 +164,9 @@ export function AdminForgotPasswordModal({
       >("/auth/admin/verify-otp", { email, otp: values.otp });
       return data.data;
     },
+    onMutate: () => {
+      setError(null);
+    },
     onSuccess: (data) => {
       setResetToken(data.resetToken);
       setNotice(data.message);
@@ -172,11 +174,7 @@ export function AdminForgotPasswordModal({
       setStep("password");
     },
     onError: (err) => {
-      setError(
-        axios.isAxiosError(err)
-          ? (err.response?.data?.message as string) || "Verification failed"
-          : "Verification failed",
-      );
+      setError(getUserFacingError(err, "Verification failed"));
     },
   });
 
@@ -193,6 +191,9 @@ export function AdminForgotPasswordModal({
       );
       return data.data;
     },
+    onMutate: () => {
+      setError(null);
+    },
     onSuccess: (data) => {
       setNotice(data.message);
       setError(null);
@@ -202,11 +203,7 @@ export function AdminForgotPasswordModal({
       }, 1800);
     },
     onError: (err) => {
-      setError(
-        axios.isAxiosError(err)
-          ? (err.response?.data?.message as string) || "Could not update password"
-          : "Could not update password",
-      );
+      setError(getUserFacingError(err, "Could not update password"));
     },
   });
 
