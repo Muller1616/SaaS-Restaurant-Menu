@@ -13,15 +13,21 @@ RUN npm ci --workspace=server --include-workspace-root --ignore-scripts
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && apt-get install -y --no-install-recommends \
+    openssl \
+    ca-certificates \
+    python3 \
+    make \
+    g++ \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/server/node_modules ./server/node_modules
 COPY package.json package-lock.json ./
 COPY server ./server
-# npm ci used --ignore-scripts (Prisma schema arrives later). Rebuild sharp's
-# native binary so QR logo overlays / image processing work in production.
-RUN npm rebuild sharp --workspace=server
+# npm ci used --ignore-scripts. Install the correct linux Sharp binary so
+# payment/menu/logo optimization works on Render.
+RUN npm rebuild sharp --workspace=server --foreground-scripts \
+  || (cd /app && npm install --no-save --foreground-scripts sharp@0.35.3)
 WORKDIR /app/server
 RUN npx prisma generate && npm run build
 
