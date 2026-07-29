@@ -8,6 +8,10 @@ const CODE_MESSAGES: Record<string, string> = {
     "Could not send the activation email. The restaurant was not approved — fix email delivery (Resend/SMTP) and try again.",
   APPROVAL_POST_COMMIT_FAILED:
     "Approval could not finish. The registration was reset to pending — try Approve again.",
+  QR_GENERATION_FAILED:
+    "Could not generate the QR image. Check Cloudinary settings and try again.",
+  QR_MISSING: "QR image is missing. Try regenerating the QR code.",
+  CUSTOM_QR_LOCKED: "Custom QR styling needs a higher plan.",
   SUPER_ADMIN_REQUIRED: "This action requires a super admin account.",
   TENANT_SUSPENDED: "This restaurant account is suspended.",
   TENANT_INACTIVE: "This restaurant account is not active.",

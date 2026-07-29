@@ -19,6 +19,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/server/node_modules ./server/node_modules
 COPY package.json package-lock.json ./
 COPY server ./server
+# npm ci used --ignore-scripts (Prisma schema arrives later). Rebuild sharp's
+# native binary so QR logo overlays / image processing work in production.
+RUN npm rebuild sharp --workspace=server
 WORKDIR /app/server
 RUN npx prisma generate && npm run build
 

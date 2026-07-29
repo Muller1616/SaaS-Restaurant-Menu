@@ -1,6 +1,6 @@
 import QRCode from "qrcode";
-import sharp from "sharp";
 import { uploadImageBuffer } from "../lib/cloudinary-media.js";
+import { logger } from "../lib/logger.js";
 import { buildPublicQrUrl } from "./qr-url.js";
 
 export const DEFAULT_QR_FG = "#0E1412";
@@ -19,6 +19,8 @@ async function overlayLogoOnPng(
   pngBuffer: Buffer,
   logoBuffer: Buffer,
 ): Promise<Buffer> {
+  // Lazy-load sharp so a missing native binary cannot break plain QR generation.
+  const sharp = (await import("sharp")).default;
   const size = 1024;
   const logoBox = Math.round(size * 0.22);
   const pad = Math.round(logoBox * 0.12);
@@ -53,8 +55,22 @@ async function overlayLogoOnPng(
     .toBuffer();
 }
 
+export type GeneratedBranchQr = {
+  menuUrl: string;
+  publicQrId: string;
+  qrCodeUrl: string;
+  qrSvg: string;
+  fgColor: string;
+  bgColor: string;
+  usedLogo: boolean;
+  /** False when Cloudinary upload failed and a data-URL fallback was used. */
+  persisted: boolean;
+};
+
 /**
- * Generate a branch QR as PNG (uploaded to Cloudinary) + SVG string (on demand).
+ * Generate a branch QR as PNG (prefer Cloudinary) + SVG string.
+ * Falls back to an inline data URL if Cloudinary is unavailable so the
+ * tenant portal never hard-fails with a 500.
  */
 export async function generateBranchQr(input: {
   publicQrId: string;
@@ -62,7 +78,7 @@ export async function generateBranchQr(input: {
   fgColor?: string | null;
   bgColor?: string | null;
   logoBuffer?: Buffer | null;
-}) {
+}): Promise<GeneratedBranchQr> {
   const menuUrl = buildPublicQrUrl(input.publicQrId);
   const dark = normalizeHexColor(input.fgColor, DEFAULT_QR_FG);
   const light = normalizeHexColor(input.bgColor, DEFAULT_QR_BG);
@@ -83,28 +99,48 @@ export async function generateBranchQr(input: {
   if (input.logoBuffer?.length) {
     try {
       pngBuffer = await overlayLogoOnPng(pngBuffer, input.logoBuffer);
-    } catch {
-      // Logo overlay failed — keep plain QR
+    } catch (error) {
+      logger.warn("QR logo overlay skipped", {
+        branchId: input.branchId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
-
-  const uploaded = await uploadImageBuffer(pngBuffer, "qr", {
-    publicId: `kitchenos/qr/${input.branchId}`,
-    format: "png",
-  });
 
   const svg = await QRCode.toString(menuUrl, {
     type: "svg",
     ...qrOptions,
   });
 
-  return {
-    menuUrl,
-    publicQrId: input.publicQrId,
-    qrCodeUrl: uploaded.url,
-    qrSvg: svg,
-    fgColor: dark,
-    bgColor: light,
-    usedLogo: useLogo,
-  };
+  try {
+    const uploaded = await uploadImageBuffer(pngBuffer, "qr", {
+      publicId: `kitchenos/qr/${input.branchId}`,
+      format: "png",
+    });
+    return {
+      menuUrl,
+      publicQrId: input.publicQrId,
+      qrCodeUrl: uploaded.url,
+      qrSvg: svg,
+      fgColor: dark,
+      bgColor: light,
+      usedLogo: useLogo,
+      persisted: true,
+    };
+  } catch (error) {
+    logger.error("Cloudinary QR upload failed — using inline data URL", error, {
+      branchId: input.branchId,
+    });
+    const dataUrl = `data:image/png;base64,${pngBuffer.toString("base64")}`;
+    return {
+      menuUrl,
+      publicQrId: input.publicQrId,
+      qrCodeUrl: dataUrl,
+      qrSvg: svg,
+      fgColor: dark,
+      bgColor: light,
+      usedLogo: useLogo,
+      persisted: false,
+    };
+  }
 }

@@ -132,9 +132,9 @@ async function writeQrForBranch(
     logoBuffer,
   });
 
-  // Overwrite uses the same public_id (`kitchenos/qr/{branchId}`); destroy only
-  // when replacing a different legacy/non-overwrite URL.
+  // Only destroy old Cloudinary assets when we successfully uploaded a new one.
   if (
+    generated.persisted &&
     previousUrl &&
     previousUrl !== generated.qrCodeUrl &&
     !previousUrl.includes(`kitchenos/qr/${branch.id}`)
@@ -161,18 +161,43 @@ export async function getBranchQr(tenantId: string, branchId: string) {
 
   let qrCodeUrl = branch.qrCodeUrl;
   let qrSvg: string | null = null;
+  let publicQrId = branch.publicQrId;
 
   if (needsQrRegeneration(qrCodeUrl)) {
-    const generated = await writeQrForBranch(branch);
-    qrCodeUrl = generated.qrCodeUrl;
-    qrSvg = generated.qrSvg;
-    await prisma.branch.update({
-      where: { id: branch.id },
-      data: {
-        qrCodeUrl,
-        publicQrId: generated.publicQrId,
-      },
-    });
+    try {
+      const generated = await writeQrForBranch(branch);
+      qrCodeUrl = generated.qrCodeUrl;
+      qrSvg = generated.qrSvg;
+      publicQrId = generated.publicQrId;
+      // Never persist data-URL fallbacks (too large / ephemeral).
+      if (generated.persisted) {
+        await prisma.branch.update({
+          where: { id: branch.id },
+          data: {
+            qrCodeUrl,
+            publicQrId: generated.publicQrId,
+          },
+        });
+      }
+    } catch (error) {
+      throw new AppError(
+        502,
+        "Could not generate the QR image. Check Cloudinary configuration and try again.",
+        {
+          code: "QR_GENERATION_FAILED",
+          detail: error instanceof Error ? error.message : String(error),
+        },
+      );
+    }
+  }
+
+  const publicUrl = toPublicMediaUrl(qrCodeUrl);
+  if (!publicUrl) {
+    throw new AppError(
+      502,
+      "QR image is missing for this branch. Try regenerating the QR code.",
+      { code: "QR_MISSING" },
+    );
   }
 
   return {
@@ -183,9 +208,9 @@ export async function getBranchQr(tenantId: string, branchId: string) {
     businessName: branch.tenant.businessName,
     tenantSlug: branch.tenant.slug,
     branchSlug: branch.slug,
-    publicQrId: branch.publicQrId,
-    menuUrl,
-    qrCodeUrl: toPublicMediaUrl(qrCodeUrl)!,
+    publicQrId,
+    menuUrl: buildPublicQrUrl(publicQrId),
+    qrCodeUrl: publicUrl,
     qrSvgUrl: null as string | null,
     qrSvg,
     qrCreatedAt: branch.qrCreatedAt,
@@ -222,13 +247,15 @@ export async function regenerateBranchQr(tenantId: string, branchId: string) {
   const refreshed = await getBranchForTenant(tenantId, branchId);
   const generated = await writeQrForBranch(refreshed);
 
-  await prisma.branch.update({
-    where: { id: branch.id },
-    data: {
-      qrCodeUrl: generated.qrCodeUrl,
-    },
-  });
-
+  // Persist only when Cloudinary succeeded.
+  if (generated.persisted) {
+    await prisma.branch.update({
+      where: { id: branch.id },
+      data: {
+        qrCodeUrl: generated.qrCodeUrl,
+      },
+    });
+  }
   await logActivity({
     userType: "TENANT",
     userId: tenantId,
@@ -304,11 +331,12 @@ export async function updateBranchQrStyle(
   });
 
   const generated = await writeQrForBranch(updated);
-  await prisma.branch.update({
-    where: { id: branch.id },
-    data: { qrCodeUrl: generated.qrCodeUrl },
-  });
-
+  if (generated.persisted) {
+    await prisma.branch.update({
+      where: { id: branch.id },
+      data: { qrCodeUrl: generated.qrCodeUrl },
+    });
+  }
   await logActivity({
     userType: "TENANT",
     userId: tenantId,
@@ -346,7 +374,7 @@ export async function getQrDownloadPayload(
     };
   }
 
-  const buffer = await fetchRemoteImageBuffer(data.qrCodeUrl);
+  const buffer = await bufferFromQrImageUrl(data.qrCodeUrl);
   if (!buffer) {
     throw new AppError(404, "QR file not found");
   }
@@ -355,6 +383,20 @@ export async function getQrDownloadPayload(
     fileName: `${branchId}-kitchenos-qr.png`,
     contentType: "image/png",
   };
+}
+
+async function bufferFromQrImageUrl(url: string): Promise<Buffer | null> {
+  if (url.startsWith("data:image/")) {
+    const comma = url.indexOf(",");
+    if (comma < 0) return null;
+    const meta = url.slice(0, comma);
+    const payload = url.slice(comma + 1);
+    if (meta.includes(";base64")) {
+      return Buffer.from(payload, "base64");
+    }
+    return Buffer.from(decodeURIComponent(payload), "utf8");
+  }
+  return fetchRemoteImageBuffer(url);
 }
 
 export function buildPrintHtml(input: {

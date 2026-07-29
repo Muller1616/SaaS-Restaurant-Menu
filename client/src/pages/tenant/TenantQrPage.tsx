@@ -8,6 +8,7 @@ import { api, type ApiSuccess } from "../../lib/api";
 import { formatAdminDateTime } from "../../lib/datetime";
 import { refreshQueries } from "../../lib/refresh-queries";
 import { MediaImage } from "../../components/MediaImage";
+import { getUserFacingError } from "../../lib/user-facing-error";
 import { subscriptionStatusLabel } from "../../lib/status-labels";
 
 type QrPayload = {
@@ -194,7 +195,10 @@ export function TenantQrPage() {
       {qr.isLoading && <p className="text-[var(--muted)]">Loading QR…</p>}
       {qr.isError && (
         <p className="text-[var(--danger)]">
-          Could not load QR. Select a branch and try again.
+          {getUserFacingError(
+            qr.error,
+            "Could not load QR. Select a branch and try again.",
+          )}
         </p>
       )}
 
