@@ -9,14 +9,25 @@ type Props = {
   cacheKey?: string | number;
 };
 
+function withCacheBust(url: string, cacheKey: string | number | undefined) {
+  if (cacheKey === undefined || cacheKey === null || cacheKey === "") return url;
+  // Never mutate data:/blob: URLs — appending ?v= breaks them and shows "Image unavailable".
+  if (
+    url.startsWith("data:") ||
+    url.startsWith("blob:") ||
+    url.startsWith("filesystem:")
+  ) {
+    return url;
+  }
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}v=${encodeURIComponent(String(cacheKey))}`;
+}
+
 /** Renders Cloudinary or legacy media with production-safe absolute URLs. */
 export function MediaImage({ src, alt, className = "", cacheKey }: Props) {
   const [failed, setFailed] = useState(false);
   const resolved = assetUrl(src);
-  const href =
-    resolved && cacheKey !== undefined
-      ? `${resolved}${resolved.includes("?") ? "&" : "?"}v=${cacheKey}`
-      : resolved;
+  const href = resolved ? withCacheBust(resolved, cacheKey) : undefined;
 
   useEffect(() => {
     setFailed(false);
