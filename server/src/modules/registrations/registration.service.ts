@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../lib/activity-log.js";
+import { logger } from "../../lib/logger.js";
 import { uniqueTenantSlug } from "../../lib/slug.js";
 import { AppError } from "../../middleware/error.js";
 import { registrationReceivedEmail } from "../../services/email.js";
@@ -134,14 +135,28 @@ export async function createRegistration(
 
   await invalidateAdminDashboardCache();
 
-  // Registration is already persisted as PENDING_APPROVAL. Do not claim
-  // confirmation was emailed unless SMTP delivery succeeded.
+  // Application is already PENDING_APPROVAL. Never return 502 here — that looks
+  // like a failed registration and encourages duplicate submissions.
   if (!notifyResult.emailed) {
-    throw new AppError(
-      502,
-      "Your application was saved, but we could not send the confirmation email. Please check your inbox later or contact support — do not submit again with the same email.",
-      { registrationSaved: true, emailDelivered: false },
-    );
+    logger.warn("Registration saved but confirmation email failed", {
+      tenantId: tenant.id,
+    });
+    return {
+      id: tenant.id,
+      fullName: tenant.fullName,
+      email: tenant.email,
+      businessName: tenant.businessName,
+      slug: tenant.slug,
+      status: tenant.status,
+      plan: {
+        name: tenant.selectedPlan.name,
+        slug: tenant.selectedPlan.slug,
+        priceMonthly: tenant.selectedPlan.priceMonthly.toString(),
+      },
+      emailDelivered: false as const,
+      message:
+        "Thanks — we received your application. Confirmation email could not be sent right now; our team still has your submission and will follow up after review. Do not submit again with the same email.",
+    };
   }
 
   return {

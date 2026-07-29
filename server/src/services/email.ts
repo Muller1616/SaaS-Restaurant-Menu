@@ -90,6 +90,12 @@ async function sendViaResend(input: {
         body?.message ||
         body?.name ||
         `Resend HTTP ${response.status}`;
+      // Common free-tier / sandbox restriction with onboarding@resend.dev
+      if (/only send testing emails to your own/i.test(detail) || response.status === 403) {
+        throw new Error(
+          `${detail}. Verify a domain in Resend and set RESEND_FROM to an address on that domain.`,
+        );
+      }
       throw new Error(detail);
     }
 

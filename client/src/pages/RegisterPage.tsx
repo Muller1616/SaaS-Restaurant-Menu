@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import axios from "axios";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -124,6 +125,25 @@ export function RegisterPage() {
     try {
       await mutation.mutateAsync(values);
     } catch (error) {
+      // Older API returned 502 after a successful save when email failed.
+      // Treat that as success so the user does not re-submit the same email.
+      if (
+        axios.isAxiosError(error) &&
+        error.response?.status === 502 &&
+        (error.response.data as { details?: { registrationSaved?: boolean } } | undefined)
+          ?.details?.registrationSaved
+      ) {
+        const valuesEmail = values.email;
+        setSuccess({
+          businessName: values.businessName,
+          email: valuesEmail,
+          plan: { name: selectedPlan?.name ?? values.planSlug },
+          emailDelivered: false,
+          message:
+            "Your application was saved. Confirmation email could not be sent — do not submit again with the same email.",
+        });
+        return;
+      }
       setError("root", {
         message: getUserFacingError(error, "Registration failed"),
       });
@@ -303,6 +323,8 @@ export function RegisterPage() {
           businessName={success.businessName}
           email={success.email}
           planName={success.plan.name}
+          emailDelivered={success.emailDelivered}
+          message={success.message}
           onClose={dismissSuccess}
         />
       )}
@@ -330,11 +352,15 @@ function RegistrationSuccessDialog({
   businessName,
   email,
   planName,
+  emailDelivered,
+  message,
   onClose,
 }: {
   businessName: string;
   email: string;
   planName: string;
+  emailDelivered: boolean;
+  message?: string;
   onClose: () => void;
 }) {
   const titleId = useId();
@@ -387,21 +413,25 @@ function RegistrationSuccessDialog({
           id={titleId}
           className="mt-2 font-[family-name:var(--font-display)] text-3xl text-white"
         >
-          Check your email
+          {emailDelivered ? "Check your email" : "Application received"}
         </h2>
         <p id={descId} className="mt-3 text-sm leading-relaxed text-[var(--muted)]">
-          Your <strong className="text-white">{planName}</strong> application for{" "}
-          <strong className="text-white">{businessName}</strong> was submitted
-          successfully. A confirmation was sent to{" "}
-          <strong className="text-white">{email}</strong>. After approval, you’ll
-          receive another email with your activation link and temporary password.
+          {message ??
+            (emailDelivered
+              ? `Your ${planName} application for ${businessName} was submitted successfully. A confirmation was sent to ${email}. After approval, you’ll receive another email with your activation link and temporary password.`
+              : `Your ${planName} application for ${businessName} was saved successfully for ${email}. Confirmation email could not be sent right now — do not submit again. Our team will review your application.`)}
         </p>
+        {!emailDelivered && (
+          <p className="mt-3 rounded-xl bg-[rgba(212,165,116,0.12)] px-3 py-2 text-sm text-[var(--gold-soft)]">
+            Your registration is already in the admin approvals queue.
+          </p>
+        )}
         <button
           type="button"
           onClick={onClose}
-          className="mt-6 min-h-11 w-full rounded-full bg-[var(--gold)] px-5 py-2.5 text-sm font-bold text-[var(--night)] transition hover:bg-[var(--gold-soft)]"
+          className="mt-6 w-full rounded-full bg-[var(--gold)] px-4 py-3 text-sm font-bold text-[var(--night)]"
         >
-          Continue to homepage
+          Done
         </button>
       </div>
     </div>
