@@ -9,6 +9,7 @@ import {
   invalidateCachesForBranch,
   invalidatePublicMenuCache,
 } from "../../lib/cache/index.js";
+import { logger } from "../../lib/logger.js";
 import { toPublicMediaUrl } from "../../lib/media-url.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error.js";
@@ -154,10 +155,26 @@ function needsQrRegeneration(qrCodeUrl: string | null | undefined) {
   return false;
 }
 
+async function buildQrSvg(input: {
+  publicQrId: string;
+  fgColor: string;
+  bgColor: string;
+  useLogo: boolean;
+}) {
+  const QRCode = (await import("qrcode")).default;
+  return QRCode.toString(buildPublicQrUrl(input.publicQrId), {
+    type: "svg",
+    width: 1024,
+    margin: 2,
+    errorCorrectionLevel: input.useLogo ? "H" : "M",
+    color: { dark: input.fgColor, light: input.bgColor },
+  });
+}
+
 export async function getBranchQr(tenantId: string, branchId: string) {
   const branch = await getBranchForTenant(tenantId, branchId);
-  const menuUrl = buildPublicQrUrl(branch.publicQrId);
   const canCustomize = planHasCustomQr(branch.subscription?.plan.features);
+  const style = styleForGeneration(branch);
 
   let qrCodeUrl = branch.qrCodeUrl;
   let qrSvg: string | null = null;
@@ -166,39 +183,42 @@ export async function getBranchQr(tenantId: string, branchId: string) {
   if (needsQrRegeneration(qrCodeUrl)) {
     try {
       const generated = await writeQrForBranch(branch);
-      qrCodeUrl = generated.qrCodeUrl;
+      qrCodeUrl = generated.persisted ? generated.qrCodeUrl : qrCodeUrl;
       qrSvg = generated.qrSvg;
       publicQrId = generated.publicQrId;
-      // Never persist data-URL fallbacks (too large / ephemeral).
+      // Persist only real Cloudinary URLs (never data-URL fallbacks).
       if (generated.persisted) {
         await prisma.branch.update({
           where: { id: branch.id },
           data: {
-            qrCodeUrl,
+            qrCodeUrl: generated.qrCodeUrl,
             publicQrId: generated.publicQrId,
           },
         });
+        qrCodeUrl = generated.qrCodeUrl;
+      } else if (generated.qrCodeUrl.startsWith("data:")) {
+        // Keep ephemeral data URL in the response so PNG download still works
+        // when Cloudinary is down; display prefers qrSvg.
+        qrCodeUrl = generated.qrCodeUrl;
       }
     } catch (error) {
-      throw new AppError(
-        502,
-        "Could not generate the QR image. Check Cloudinary configuration and try again.",
-        {
-          code: "QR_GENERATION_FAILED",
-          detail: error instanceof Error ? error.message : String(error),
-        },
-      );
+      logger.warn("QR PNG generation failed — continuing with SVG-only preview", {
+        branchId: branch.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
-  const publicUrl = toPublicMediaUrl(qrCodeUrl);
-  if (!publicUrl) {
-    throw new AppError(
-      502,
-      "QR image is missing for this branch. Try regenerating the QR code.",
-      { code: "QR_MISSING" },
-    );
+  if (!qrSvg) {
+    qrSvg = await buildQrSvg({
+      publicQrId,
+      fgColor: style.fgColor,
+      bgColor: style.bgColor,
+      useLogo: canCustomize && branch.qrUseLogo,
+    });
   }
+
+  const publicUrl = toPublicMediaUrl(qrCodeUrl);
 
   return {
     branchId: branch.id,
@@ -355,18 +375,18 @@ export async function getQrDownloadPayload(
   format: "png" | "svg",
 ) {
   const data = await getBranchQr(tenantId, branchId);
+  const branch = await getBranchForTenant(tenantId, branchId);
+  const style = styleForGeneration(branch);
 
   if (format === "svg") {
-    const branch = await getBranchForTenant(tenantId, branchId);
-    const style = styleForGeneration(branch);
-    const QRCode = (await import("qrcode")).default;
-    const svg = await QRCode.toString(data.menuUrl, {
-      type: "svg",
-      width: 1024,
-      margin: 2,
-      errorCorrectionLevel: "M",
-      color: { dark: style.fgColor, light: style.bgColor },
-    });
+    const svg =
+      data.qrSvg ??
+      (await buildQrSvg({
+        publicQrId: data.publicQrId,
+        fgColor: style.fgColor,
+        bgColor: style.bgColor,
+        useLogo: false,
+      }));
     return {
       buffer: Buffer.from(svg, "utf8"),
       fileName: `${branchId}-kitchenos-qr.svg`,
@@ -374,10 +394,26 @@ export async function getQrDownloadPayload(
     };
   }
 
-  const buffer = await bufferFromQrImageUrl(data.qrCodeUrl);
-  if (!buffer) {
-    throw new AppError(404, "QR file not found");
+  if (data.qrCodeUrl) {
+    const fromUrl = await bufferFromQrImageUrl(data.qrCodeUrl);
+    if (fromUrl) {
+      return {
+        buffer: fromUrl,
+        fileName: `${branchId}-kitchenos-qr.png`,
+        contentType: "image/png",
+      };
+    }
   }
+
+  // Last resort: generate PNG in-process (no Cloudinary required).
+  const QRCode = (await import("qrcode")).default;
+  const buffer = await QRCode.toBuffer(data.menuUrl, {
+    type: "png",
+    width: 1024,
+    margin: 2,
+    errorCorrectionLevel: "M",
+    color: { dark: style.fgColor, light: style.bgColor },
+  });
   return {
     buffer,
     fileName: `${branchId}-kitchenos-qr.png`,
@@ -385,7 +421,10 @@ export async function getQrDownloadPayload(
   };
 }
 
-async function bufferFromQrImageUrl(url: string): Promise<Buffer | null> {
+async function bufferFromQrImageUrl(
+  url: string | null | undefined,
+): Promise<Buffer | null> {
+  if (!url) return null;
   if (url.startsWith("data:image/")) {
     const comma = url.indexOf(",");
     if (comma < 0) return null;
@@ -404,12 +443,23 @@ export function buildPrintHtml(input: {
   branchName: string;
   location: string;
   menuUrl: string;
-  qrCodeUrl: string;
+  qrCodeUrl: string | null;
+  qrSvg?: string | null;
   assetBaseUrl: string;
 }) {
-  const qrSrc = input.qrCodeUrl.startsWith("http")
-    ? input.qrCodeUrl
-    : `${input.assetBaseUrl.replace(/\/$/, "")}${input.qrCodeUrl}`;
+  const qrBlock = input.qrSvg?.trim()
+    ? `<div class="qr">${input.qrSvg}</div>`
+    : (() => {
+        const qrSrc = !input.qrCodeUrl
+          ? ""
+          : input.qrCodeUrl.startsWith("http") ||
+              input.qrCodeUrl.startsWith("data:")
+            ? input.qrCodeUrl
+            : `${input.assetBaseUrl.replace(/\/$/, "")}${input.qrCodeUrl}`;
+        return qrSrc
+          ? `<div class="qr"><img src="${qrSrc}" alt="Menu QR code" /></div>`
+          : `<div class="qr"><p>QR unavailable</p></div>`;
+      })();
 
   return `<!doctype html>
 <html lang="en">
@@ -461,7 +511,7 @@ export function buildPrintHtml(input: {
       border: 1px solid #ddd3c2;
       background: #fff;
     }
-    .qr img { width: 100%; height: 100%; object-fit: contain; }
+    .qr img, .qr svg { width: 100%; height: 100%; object-fit: contain; }
     .hint {
       font-family: Manrope, Arial, sans-serif;
       font-size: 14px;
@@ -492,7 +542,7 @@ export function buildPrintHtml(input: {
     <h1>${escapeHtml(input.businessName)}</h1>
     <h2>${escapeHtml(input.branchName)}</h2>
     <p class="hint">${escapeHtml(input.location)}<br/>Scan to view our menu</p>
-    <div class="qr"><img src="${qrSrc}" alt="Menu QR code" /></div>
+    ${qrBlock}
     <p class="url">${escapeHtml(input.menuUrl)}</p>
   </div>
   <script>window.addEventListener('load', () => setTimeout(() => window.print(), 300));</script>

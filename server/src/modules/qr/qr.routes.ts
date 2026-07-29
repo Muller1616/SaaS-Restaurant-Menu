@@ -97,6 +97,7 @@ qrRouter.get("/print", async (req: BranchAuthedRequest, res, next) => {
       location: data.location,
       menuUrl: data.menuUrl,
       qrCodeUrl: data.qrCodeUrl,
+      qrSvg: data.qrSvg,
       assetBaseUrl,
     });
     res.setHeader("Content-Type", "text/html; charset=utf-8");

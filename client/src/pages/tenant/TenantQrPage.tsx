@@ -7,7 +7,7 @@ import { publicQrPath, tenantPortalPath } from "../../lib/tenant-paths";
 import { api, type ApiSuccess } from "../../lib/api";
 import { formatAdminDateTime } from "../../lib/datetime";
 import { refreshQueries } from "../../lib/refresh-queries";
-import { MediaImage } from "../../components/MediaImage";
+import { QrCodeImage } from "../../components/QrCodeImage";
 import { getUserFacingError } from "../../lib/user-facing-error";
 import { subscriptionStatusLabel } from "../../lib/status-labels";
 
@@ -21,8 +21,9 @@ type QrPayload = {
   branchSlug: string;
   publicQrId: string;
   menuUrl: string;
-  qrCodeUrl: string;
+  qrCodeUrl: string | null;
   qrSvgUrl: string | null;
+  qrSvg?: string | null;
   qrCreatedAt?: string;
   qrRegeneratedAt?: string | null;
   subscriptionStatus: string | null;
@@ -215,10 +216,12 @@ export function TenantQrPage() {
               className="mx-auto mt-8 w-full max-w-sm rounded-[1.5rem] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.25)]"
               style={{ background: qr.data.style.bgColor }}
             >
-              <MediaImage
-                src={qr.data.qrCodeUrl}
+              <QrCodeImage
+                qrSvg={qr.data.qrSvg}
+                qrCodeUrl={qr.data.qrCodeUrl}
                 alt={`${qr.data.branchName} QR code`}
                 className="aspect-square w-full object-contain"
+                background={qr.data.style.bgColor}
                 cacheKey={cacheBust}
               />
             </div>
