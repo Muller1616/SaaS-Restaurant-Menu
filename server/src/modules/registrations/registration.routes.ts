@@ -132,7 +132,10 @@ publicRouter.post(
           next(
             error instanceof AppError
               ? error
-              : new AppError(400, "Could not process payment screenshot"),
+              : new AppError(
+                  400,
+                  "Could not upload the payment screenshot. Try a JPG or PNG under 2MB.",
+                ),
           ),
         );
     });
