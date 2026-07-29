@@ -6,11 +6,24 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpg",
   "image/png",
   "image/webp",
+  "image/pjpeg",
 ]);
+
+function hasAllowedExtension(name: string) {
+  return /\.(jpe?g|png|webp)$/i.test(name);
+}
 
 export function validateDeviceImage(file: File | null | undefined): string | null {
   if (!file) return "Choose an image from your device";
-  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+
+  const mime = String(file.type || "").toLowerCase();
+  const mimeOk =
+    ALLOWED_IMAGE_TYPES.has(mime) ||
+    // Mobile browsers sometimes omit MIME for gallery screenshots.
+    ((!mime || mime === "application/octet-stream") &&
+      hasAllowedExtension(file.name));
+
+  if (!mimeOk) {
     return "Only JPG, PNG, or WebP images are allowed";
   }
   if (file.size > MAX_IMAGE_BYTES) {

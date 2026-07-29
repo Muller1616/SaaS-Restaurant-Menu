@@ -15,6 +15,8 @@ export const CSRF_HEADER = "X-CSRF-Token";
 
 /** Never leave auth UI spinners waiting forever (Render cold start + SMTP). */
 export const API_TIMEOUT_MS = 30_000;
+/** Uploads (payment proof, menu images) need more headroom on cold Render + Cloudinary. */
+export const API_UPLOAD_TIMEOUT_MS = 90_000;
 
 const apiBase = getApiBaseUrl();
 
@@ -107,6 +109,10 @@ api.interceptors.request.use(async (config) => {
 
   if (config.data instanceof FormData) {
     delete config.headers["Content-Type"];
+    // Default JSON timeout is too short for Cloudinary-backed uploads.
+    if (config.timeout == null || config.timeout === API_TIMEOUT_MS) {
+      config.timeout = API_UPLOAD_TIMEOUT_MS;
+    }
   }
 
   const method = (config.method ?? "get").toLowerCase();
