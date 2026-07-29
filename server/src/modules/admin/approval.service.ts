@@ -351,7 +351,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
     const notifyResult = await notifyTenant({
       tenantId: tenant.id,
       type: "SYSTEM",
-      title: "Account approved â€” activate to sign in",
+      title: "Account approved — activate to sign in",
       message: `Your KitchenOS account was approved on the ${tenant.selectedPlan.name} plan. Open the activation link in your email to set your password.`,
       forceEmail: true,
       email: {
@@ -360,21 +360,6 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
         html: emailContent.html,
       },
     });
-
-    if (!notifyResult.emailed) {
-      await rollbackPartialApproval({
-        tenantId: tenant.id,
-        branchId: result.branch.id,
-        pendingPaymentId: pendingPayment?.id ?? null,
-        adminId,
-        reason: "Approval rolled back â€” activation email failed",
-      });
-      throw new AppError(
-        502,
-        "Activation email could not be sent. Approval was not completed. On Render free tier, verify RESEND_API_KEY and that RESEND_FROM can send to this restaurant email (verify a domain in Resend for production).",
-        { code: "ACTIVATION_EMAIL_FAILED" },
-      );
-    }
 
     await logActivity({
       userType: "ADMIN",
@@ -386,13 +371,47 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
         businessName: tenant.businessName,
         plan: tenant.selectedPlan.slug,
         branchId: result.branch.id,
-        emailDelivered: true,
+        emailDelivered: notifyResult.emailed,
         activationIssued: true,
       },
     });
 
     await invalidateAdminDashboardCache();
-    logger.info("Registration approval completed", { tenantId: tenant.id });
+    logger.info("Registration approval completed", {
+      tenantId: tenant.id,
+      emailDelivered: notifyResult.emailed,
+    });
+
+    // Keep the approval even when email fails (common with Resend sandbox /
+    // unverified domain). Surface one-time credentials to the admin so they
+    // can share them manually; tenant can also use Resend activation later.
+    if (!notifyResult.emailed) {
+      logger.warn("Approval kept active but activation email failed", {
+        tenantId: tenant.id,
+      });
+      return {
+        id: tenant.id,
+        email: tenant.email,
+        businessName: tenant.businessName,
+        status: "ACTIVE" as const,
+        branch: {
+          id: result.branch.id,
+          name: result.branch.name,
+          slug: result.branch.slug,
+          qrCodeUrl: qr.qrCodeUrl,
+          menuUrl: qr.menuUrl,
+        },
+        portalUrl: `/r/${tenant.slug}/dashboard`,
+        loginUrl,
+        activationUrl,
+        temporaryPassword: plainPassword,
+        emailDelivered: false as const,
+        message:
+          "Restaurant approved, but the activation email could not be sent. Copy the activation link and temporary password below and send them to the owner. Fix RESEND_FROM / verified domain so future emails work.",
+        publicMenuUrl: qr.menuUrl,
+      };
+    }
+
     return {
       id: tenant.id,
       email: tenant.email,
@@ -415,7 +434,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
   } catch (error) {
     if (error instanceof AppError) throw error;
 
-    logger.error("Registration approval failed after commit â€” rolling back", error, {
+    logger.error("Registration approval failed after commit — rolling back", error, {
       tenantId: tenant.id,
       branchId: result.branch.id,
     });
@@ -426,7 +445,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
         branchId: result.branch.id,
         pendingPaymentId: pendingPayment?.id ?? null,
         adminId,
-        reason: "Approval rolled back â€” post-approval step failed",
+        reason: "Approval rolled back — post-approval step failed",
       });
     } catch (rollbackError) {
       logger.error("Approval rollback failed", rollbackError, {
@@ -437,7 +456,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
 
     throw new AppError(
       500,
-      "Approval could not be completed (QR or email step failed). The registration was left pending so you can retry.",
+      "Approval could not be completed (QR generation or a related step failed). The registration was left pending so you can retry.",
       { code: "APPROVAL_POST_COMMIT_FAILED" },
     );
   }

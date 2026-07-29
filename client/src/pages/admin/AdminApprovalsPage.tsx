@@ -36,6 +36,8 @@ type ApproveResult = {
   email: string;
   businessName: string;
   loginUrl: string;
+  activationUrl?: string;
+  temporaryPassword?: string;
   emailDelivered?: boolean;
   message?: string;
   branch: {
@@ -521,11 +523,18 @@ export function AdminApprovalsPage() {
             </h3>
             <p className="mt-2 text-sm text-[var(--muted)]">
               {approvedCreds.message ??
-                "Activation email sent. The restaurant owner must use the link and temporary password in that email — credentials are never shown here."}
+                "Activation email sent. The restaurant owner must use the link and temporary password in that email."}
             </p>
+            {!approvedCreds.emailDelivered && (
+              <p className="mt-3 rounded-xl bg-[rgba(212,165,116,0.12)] px-3 py-2 text-sm text-[var(--gold-soft)]">
+                Email delivery failed. Share the activation details below with
+                the restaurant owner now (shown once).
+              </p>
+            )}
             <div className="mt-5 space-y-2 rounded-2xl border border-[var(--line)] bg-black/25 p-4 text-sm text-white">
               <p>
-                <span className="text-[var(--muted)]">Email:</span> {approvedCreds.email}
+                <span className="text-[var(--muted)]">Email:</span>{" "}
+                {approvedCreds.email}
               </p>
               <p>
                 <span className="text-[var(--muted)]">Branch:</span>{" "}
@@ -535,8 +544,45 @@ export function AdminApprovalsPage() {
                 <span className="text-[var(--muted)]">Menu URL:</span>{" "}
                 {approvedCreds.branch.menuUrl}
               </p>
+              {approvedCreds.activationUrl && (
+                <p className="break-all">
+                  <span className="text-[var(--muted)]">Activation link:</span>{" "}
+                  {approvedCreds.activationUrl}
+                </p>
+              )}
+              {approvedCreds.temporaryPassword && (
+                <p>
+                  <span className="text-[var(--muted)]">Temp password:</span>{" "}
+                  <span className="font-mono tracking-wide">
+                    {approvedCreds.temporaryPassword}
+                  </span>
+                </p>
+              )}
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
+              {approvedCreds.activationUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(
+                      [
+                        `Email: ${approvedCreds.email}`,
+                        `Activation: ${approvedCreds.activationUrl}`,
+                        approvedCreds.temporaryPassword
+                          ? `Temporary password: ${approvedCreds.temporaryPassword}`
+                          : null,
+                        `Login: ${approvedCreds.loginUrl}`,
+                      ]
+                        .filter(Boolean)
+                        .join("\n"),
+                    );
+                    showToast("Activation details copied");
+                  }}
+                  className="rounded-full bg-[var(--gold)] px-5 py-2.5 text-sm font-bold text-[var(--night)]"
+                >
+                  Copy details
+                </button>
+              )}
               <a
                 href={approvedCreds.loginUrl}
                 className="rounded-full border border-white/15 px-5 py-2.5 text-sm hover:border-[var(--gold)]"
