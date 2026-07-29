@@ -5,7 +5,9 @@ const GENERIC = "Something went wrong. Please try again.";
 const CODE_MESSAGES: Record<string, string> = {
   TOKEN_REVOKED: "Your session has ended. Please sign in again.",
   ACTIVATION_EMAIL_FAILED:
-    "Could not send the activation email. The restaurant was not approved — fix SMTP and try again.",
+    "Could not send the activation email. The restaurant was not approved — fix email delivery (Resend/SMTP) and try again.",
+  APPROVAL_POST_COMMIT_FAILED:
+    "Approval could not finish. The registration was reset to pending — try Approve again.",
   SUPER_ADMIN_REQUIRED: "This action requires a super admin account.",
   TENANT_SUSPENDED: "This restaurant account is suspended.",
   TENANT_INACTIVE: "This restaurant account is not active.",

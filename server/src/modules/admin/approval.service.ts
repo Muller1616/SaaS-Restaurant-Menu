@@ -4,6 +4,7 @@ import { z } from "zod";
 import { env } from "../../config/env.js";
 import { logActivity } from "../../lib/activity-log.js";
 import { invalidateAdminDashboardCache } from "../../lib/cache/index.js";
+import { logger } from "../../lib/logger.js";
 import { generateSecurePassword } from "../../lib/password.js";
 import { prisma } from "../../lib/prisma.js";
 import { toSlug, uniquePublicQrId } from "../../lib/slug.js";
@@ -57,6 +58,67 @@ export const bulkApproveSchema = z.object({
   ids: z.array(z.string().min(1)).min(1),
 });
 
+/**
+ * Undo a partial approval so the registration can be retried safely.
+ */
+async function rollbackPartialApproval(input: {
+  tenantId: string;
+  branchId: string;
+  pendingPaymentId: string | null;
+  adminId: string;
+  reason: string;
+}) {
+  await prisma.$transaction(async (tx) => {
+    await tx.tenant.update({
+      where: { id: input.tenantId },
+      data: {
+        status: "PENDING_APPROVAL",
+        passwordHash: null,
+        mustChangePassword: false,
+        activatedAt: null,
+      },
+    });
+    await tx.branch.update({
+      where: { id: input.branchId },
+      data: {
+        deletedAt: new Date(),
+        isActive: false,
+        isDefault: false,
+      },
+    });
+    await tx.subscription.updateMany({
+      where: { branchId: input.branchId },
+      data: { status: "CANCELLED" },
+    });
+    if (input.pendingPaymentId) {
+      await tx.payment.update({
+        where: { id: input.pendingPaymentId },
+        data: {
+          status: "PENDING",
+          approvedById: null,
+          branchId: null,
+          adminNotes: null,
+        },
+      });
+    }
+    await tx.activationToken.updateMany({
+      where: { tenantId: input.tenantId, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+  });
+  await revokeBranchQrTokens(input.branchId);
+  await logActivity({
+    userType: "ADMIN",
+    userId: input.adminId,
+    action: "UPDATE",
+    entityType: "tenant",
+    entityId: input.tenantId,
+    summary: input.reason,
+    details: { emailDelivered: false, rolledBack: true },
+  });
+  await invalidateAdminDashboardCache();
+}
+
 async function approveSingleRegistration(tenantId: string, adminId: string) {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
@@ -75,7 +137,12 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
     throw new AppError(404, "Registration not found");
   }
   if (tenant.status !== "PENDING_APPROVAL") {
-    throw new AppError(400, "Registration is not pending approval");
+    throw new AppError(
+      400,
+      tenant.status === "ACTIVE" && !tenant.activatedAt
+        ? "This registration was already approved. Use Resend activation email if the owner did not receive credentials."
+        : "Registration is not pending approval",
+    );
   }
 
   const plainPassword = generateSecurePassword(12);
@@ -91,12 +158,18 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
   }
 
   const branchName = tenant.businessName;
-  const branchSlug = toSlug(branchName) || "main";
+  const baseSlug = toSlug(branchName) || "main";
   const publicQrId = await uniquePublicQrId();
   const now = new Date();
   const durationMonths = pendingPayment?.durationMonths ?? 1;
   // FR-6.1: every approval starts a 14-day TRIAL; paid months begin after trial ends.
   const trialExpiry = addDays(now, TRIAL_DAYS);
+
+  logger.info("Registration approval started", {
+    tenantId: tenant.id,
+    plan: tenant.selectedPlan.slug,
+    isPaid,
+  });
 
   const result = await prisma.$transaction(
     async (tx) => {
@@ -111,19 +184,57 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
         },
       });
 
-      const branch = await tx.branch.create({
-        data: {
+      // Re-approve after a failed email/QR attempt: revive soft-deleted branch
+      // so @@unique([tenantId, slug]) does not conflict.
+      const softDeleted = await tx.branch.findFirst({
+        where: {
           tenantId: tenant.id,
-          name: branchName,
-          location: tenant.businessLocation,
-          phone: tenant.phone,
-          slug: branchSlug,
-          publicQrId,
-          qrCreatedAt: now,
-          isActive: true,
-          isDefault: true,
+          deletedAt: { not: null },
         },
+        orderBy: { createdAt: "desc" },
       });
+
+      let branch;
+      if (softDeleted) {
+        await tx.subscription.deleteMany({ where: { branchId: softDeleted.id } });
+        branch = await tx.branch.update({
+          where: { id: softDeleted.id },
+          data: {
+            name: branchName,
+            location: tenant.businessLocation,
+            phone: tenant.phone,
+            slug: softDeleted.slug || baseSlug,
+            publicQrId,
+            qrCodeUrl: null,
+            qrCreatedAt: now,
+            deletedAt: null,
+            isActive: true,
+            isDefault: true,
+          },
+        });
+      } else {
+        const slugTaken = await tx.branch.findFirst({
+          where: { tenantId: tenant.id, slug: baseSlug },
+          select: { id: true },
+        });
+        const branchSlug = slugTaken
+          ? `${baseSlug}-${publicQrId.slice(0, 6)}`
+          : baseSlug;
+
+        branch = await tx.branch.create({
+          data: {
+            tenantId: tenant.id,
+            name: branchName,
+            location: tenant.businessLocation,
+            phone: tenant.phone,
+            slug: branchSlug,
+            publicQrId,
+            qrCreatedAt: now,
+            isActive: true,
+            isDefault: true,
+          },
+        });
+      }
 
       await recordIssuedQrToken(tx, {
         token: publicQrId,
@@ -163,176 +274,173 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
       timeout: 20_000,
     },
   );
-  const qr = await generateBranchQr({
-    publicQrId: result.branch.publicQrId,
-    branchId: result.branch.id,
-  });
 
-  await prisma.branch.update({
-    where: { id: result.branch.id },
-    data: { qrCodeUrl: qr.qrCodeUrl },
-  });
-
-  await logActivity({
-    userType: "ADMIN",
-    userId: adminId,
-    action: "CREATE",
-    entityType: "branch_qr",
-    entityId: result.branch.id,
-    summary: "QR code generated successfully",
-    details: {
-      publicQrId: result.branch.publicQrId,
-      menuUrl: qr.menuUrl,
-      branchName: result.branch.name,
+  try {
+    logger.info("Registration approval: generating QR", {
       tenantId: tenant.id,
-    },
-  });
-
-  const subscription = await prisma.subscription.findUnique({
-    where: { branchId: result.branch.id },
-  });
-  if (subscription) {
-    await recordSubscriptionEvent({
-      subscriptionId: subscription.id,
       branchId: result.branch.id,
-      tenantId: tenant.id,
-      kind: "CREATED",
-      toStatus: "TRIAL",
-      summary: pendingPayment
-        ? `14-day trial started. After trial, paid access continues for ${durationMonths} month(s).`
-        : `14-day trial started on the ${tenant.selectedPlan.name} plan.`,
-      actorType: "ADMIN",
-      actorId: adminId,
-      meta: {
-        planId: tenant.selectedPlanId,
-        planName: tenant.selectedPlan.name,
-        trialDays: TRIAL_DAYS,
-        trialExpiry: trialExpiry.toISOString(),
-        paidDurationMonths: isPaid ? durationMonths : null,
-      },
     });
-  }
-
-  const { activationUrl } = await issueActivationToken(tenant.id, tenant.slug);
-  const loginUrl = `${env.clientUrl}/tenant/login`;
-  const emailContent = accountApprovedEmail({
-    fullName: tenant.fullName,
-    businessName: tenant.businessName,
-    email: tenant.email,
-    password: plainPassword,
-    planName: tenant.selectedPlan.name,
-    branchName: result.branch.name,
-    loginUrl,
-    activationUrl,
-    activationHours: env.activationTokenHours,
-    trialDays: TRIAL_DAYS,
-  });
-
-  const notifyResult = await notifyTenant({
-    tenantId: tenant.id,
-    type: "SYSTEM",
-    title: "Account approved — activate to sign in",
-    message: `Your KitchenOS account was approved on the ${tenant.selectedPlan.name} plan. Open the activation link in your email to set your password.`,
-    forceEmail: true,
-    email: {
-      subject: emailContent.subject,
-      text: emailContent.text,
-      html: emailContent.html,
-    },
-  });
-
-  if (!notifyResult.emailed) {
-    // Option A: do not leave an ACTIVE tenant without delivered credentials.
-    await prisma.$transaction(async (tx) => {
-      await tx.tenant.update({
-        where: { id: tenant.id },
-        data: {
-          status: "PENDING_APPROVAL",
-          passwordHash: null,
-          mustChangePassword: false,
-          activatedAt: null,
-        },
-      });
-      await tx.branch.update({
-        where: { id: result.branch.id },
-        data: {
-          deletedAt: new Date(),
-          isActive: false,
-          isDefault: false,
-        },
-      });
-      await tx.subscription.updateMany({
-        where: { branchId: result.branch.id },
-        data: { status: "CANCELLED" },
-      });
-      if (pendingPayment) {
-        await tx.payment.update({
-          where: { id: pendingPayment.id },
-          data: {
-            status: "PENDING",
-            approvedById: null,
-            branchId: null,
-            adminNotes: null,
-          },
-        });
-      }
-      await tx.activationToken.updateMany({
-        where: { tenantId: tenant.id, usedAt: null },
-        data: { usedAt: new Date() },
-      });
+    const qr = await generateBranchQr({
+      publicQrId: result.branch.publicQrId,
+      branchId: result.branch.id,
     });
-    await revokeBranchQrTokens(result.branch.id);
+
+    await prisma.branch.update({
+      where: { id: result.branch.id },
+      data: { qrCodeUrl: qr.qrCodeUrl },
+    });
+
     await logActivity({
       userType: "ADMIN",
       userId: adminId,
-      action: "UPDATE",
+      action: "CREATE",
+      entityType: "branch_qr",
+      entityId: result.branch.id,
+      summary: "QR code generated successfully",
+      details: {
+        publicQrId: result.branch.publicQrId,
+        menuUrl: qr.menuUrl,
+        branchName: result.branch.name,
+        tenantId: tenant.id,
+      },
+    });
+
+    const subscription = await prisma.subscription.findUnique({
+      where: { branchId: result.branch.id },
+    });
+    if (subscription) {
+      await recordSubscriptionEvent({
+        subscriptionId: subscription.id,
+        branchId: result.branch.id,
+        tenantId: tenant.id,
+        kind: "CREATED",
+        toStatus: "TRIAL",
+        summary: pendingPayment
+          ? `14-day trial started. After trial, paid access continues for ${durationMonths} month(s).`
+          : `14-day trial started on the ${tenant.selectedPlan.name} plan.`,
+        actorType: "ADMIN",
+        actorId: adminId,
+        meta: {
+          planId: tenant.selectedPlanId,
+          planName: tenant.selectedPlan.name,
+          trialDays: TRIAL_DAYS,
+          trialExpiry: trialExpiry.toISOString(),
+          paidDurationMonths: isPaid ? durationMonths : null,
+        },
+      });
+    }
+
+    logger.info("Registration approval: sending activation email", {
+      tenantId: tenant.id,
+    });
+    const { activationUrl } = await issueActivationToken(tenant.id, tenant.slug);
+    const loginUrl = `${env.clientUrl}/tenant/login`;
+    const emailContent = accountApprovedEmail({
+      fullName: tenant.fullName,
+      businessName: tenant.businessName,
+      email: tenant.email,
+      password: plainPassword,
+      planName: tenant.selectedPlan.name,
+      branchName: result.branch.name,
+      loginUrl,
+      activationUrl,
+      activationHours: env.activationTokenHours,
+      trialDays: TRIAL_DAYS,
+    });
+
+    const notifyResult = await notifyTenant({
+      tenantId: tenant.id,
+      type: "SYSTEM",
+      title: "Account approved — activate to sign in",
+      message: `Your KitchenOS account was approved on the ${tenant.selectedPlan.name} plan. Open the activation link in your email to set your password.`,
+      forceEmail: true,
+      email: {
+        subject: emailContent.subject,
+        text: emailContent.text,
+        html: emailContent.html,
+      },
+    });
+
+    if (!notifyResult.emailed) {
+      await rollbackPartialApproval({
+        tenantId: tenant.id,
+        branchId: result.branch.id,
+        pendingPaymentId: pendingPayment?.id ?? null,
+        adminId,
+        reason: "Approval rolled back — activation email failed",
+      });
+      throw new AppError(
+        502,
+        "Activation email could not be sent. Approval was not completed. On Render free tier, verify RESEND_API_KEY and that RESEND_FROM can send to this restaurant email (verify a domain in Resend for production).",
+        { code: "ACTIVATION_EMAIL_FAILED" },
+      );
+    }
+
+    await logActivity({
+      userType: "ADMIN",
+      userId: adminId,
+      action: "APPROVE",
       entityType: "tenant",
       entityId: tenant.id,
-      summary: "Approval rolled back — activation email failed",
-      details: { emailDelivered: false },
+      details: {
+        businessName: tenant.businessName,
+        plan: tenant.selectedPlan.slug,
+        branchId: result.branch.id,
+        emailDelivered: true,
+        activationIssued: true,
+      },
     });
+
+    await invalidateAdminDashboardCache();
+    logger.info("Registration approval completed", { tenantId: tenant.id });
+    return {
+      id: tenant.id,
+      email: tenant.email,
+      businessName: tenant.businessName,
+      status: "ACTIVE" as const,
+      branch: {
+        id: result.branch.id,
+        name: result.branch.name,
+        slug: result.branch.slug,
+        qrCodeUrl: qr.qrCodeUrl,
+        menuUrl: qr.menuUrl,
+      },
+      portalUrl: `/r/${tenant.slug}/dashboard`,
+      loginUrl,
+      emailDelivered: true as const,
+      message:
+        "Activation email sent. The restaurant owner must use the link and temporary password in that email.",
+      publicMenuUrl: qr.menuUrl,
+    };
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+
+    logger.error("Registration approval failed after commit — rolling back", error, {
+      tenantId: tenant.id,
+      branchId: result.branch.id,
+    });
+
+    try {
+      await rollbackPartialApproval({
+        tenantId: tenant.id,
+        branchId: result.branch.id,
+        pendingPaymentId: pendingPayment?.id ?? null,
+        adminId,
+        reason: "Approval rolled back — post-approval step failed",
+      });
+    } catch (rollbackError) {
+      logger.error("Approval rollback failed", rollbackError, {
+        tenantId: tenant.id,
+        branchId: result.branch.id,
+      });
+    }
+
     throw new AppError(
-      502,
-      "Activation email could not be sent. Approval was not completed. Fix SMTP and try again.",
-      { code: "ACTIVATION_EMAIL_FAILED" },
+      500,
+      "Approval could not be completed (QR or email step failed). The registration was left pending so you can retry.",
+      { code: "APPROVAL_POST_COMMIT_FAILED" },
     );
   }
-
-  await logActivity({
-    userType: "ADMIN",
-    userId: adminId,
-    action: "APPROVE",
-    entityType: "tenant",
-    entityId: tenant.id,
-    details: {
-      businessName: tenant.businessName,
-      plan: tenant.selectedPlan.slug,
-      branchId: result.branch.id,
-      emailDelivered: true,
-      activationIssued: true,
-    },
-  });
-
-  await invalidateAdminDashboardCache();
-  return {
-    id: tenant.id,
-    email: tenant.email,
-    businessName: tenant.businessName,
-    status: "ACTIVE" as const,
-    branch: {
-      id: result.branch.id,
-      name: result.branch.name,
-      slug: result.branch.slug,
-      qrCodeUrl: qr.qrCodeUrl,
-      menuUrl: qr.menuUrl,
-    },
-    portalUrl: `/r/${tenant.slug}/dashboard`,
-    loginUrl,
-    emailDelivered: true as const,
-    message:
-      "Activation email sent. The restaurant owner must use the link and temporary password in that email.",
-    publicMenuUrl: qr.menuUrl,
-  };
 }
 
 /**
