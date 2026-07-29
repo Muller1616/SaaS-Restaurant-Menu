@@ -56,22 +56,39 @@ export async function processAndUploadImage(
       publicId: uploaded.publicId,
     });
   } catch (error) {
+    const detail =
+      error instanceof Error
+        ? error.message
+        : typeof error === "object" &&
+            error &&
+            "message" in error &&
+            typeof (error as { message: unknown }).message === "string"
+          ? (error as { message: string }).message
+          : String(error);
+
     logger.error("Upload processing failed", error, {
       preset,
       folder,
       bytes: req.file.buffer.length,
       mimetype: req.file.mimetype,
+      detail,
     });
     if (error instanceof AppError) throw error;
 
-    const message = error instanceof Error ? error.message : String(error);
-    if (/cloudinary is not configured/i.test(message)) {
+    if (/cloudinary is not configured/i.test(detail)) {
       throw new AppError(
         503,
         "Image storage is not configured. Please contact support.",
       );
     }
-    if (/Invalid image|unsupported image|Input buffer/i.test(message)) {
+    if (/401|403|Invalid Signature|Invalid API|unauthorized/i.test(detail)) {
+      throw new AppError(
+        503,
+        "Image storage credentials were rejected. Update CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET on the server, then redeploy.",
+        { code: "CLOUDINARY_AUTH_FAILED" },
+      );
+    }
+    if (/Invalid image|unsupported image|Input buffer/i.test(detail)) {
       throw new AppError(
         400,
         "That file could not be read as an image. Use a JPG, PNG, or WebP screenshot.",
@@ -80,6 +97,7 @@ export async function processAndUploadImage(
     throw new AppError(
       400,
       "Could not upload the image. Please try a smaller JPG or PNG screenshot (max 2MB).",
+      { code: "IMAGE_UPLOAD_FAILED" },
     );
   }
 }

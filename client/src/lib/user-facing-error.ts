@@ -8,6 +8,10 @@ const CODE_MESSAGES: Record<string, string> = {
     "Could not send the activation email. The restaurant was not approved — fix email delivery (Resend/SMTP) and try again.",
   APPROVAL_POST_COMMIT_FAILED:
     "Approval could not finish. The registration was reset to pending — try Approve again.",
+  CLOUDINARY_AUTH_FAILED:
+    "Image storage is misconfigured on the server. Ask the admin to update Cloudinary credentials.",
+  IMAGE_UPLOAD_FAILED:
+    "Could not upload the image. Try a smaller JPG or PNG (max 2MB).",
   QR_GENERATION_FAILED:
     "Could not generate the QR image. Check Cloudinary settings and try again.",
   QR_MISSING: "QR image is missing. Try regenerating the QR code.",

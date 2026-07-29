@@ -33,44 +33,93 @@ export function isCloudinaryUrl(url: string | null | undefined): boolean {
   return Boolean(url && url.includes("res.cloudinary.com"));
 }
 
-/** Upload an in-memory image buffer to Cloudinary. */
+function cloudinaryErrorMessage(error: unknown): string {
+  if (!error) return "Unknown Cloudinary error";
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object") {
+    const obj = error as {
+      message?: unknown;
+      error?: { message?: unknown };
+      http_code?: unknown;
+      name?: unknown;
+    };
+    const nested =
+      (typeof obj.error?.message === "string" && obj.error.message) ||
+      (typeof obj.message === "string" && obj.message) ||
+      null;
+    if (nested) {
+      const code = obj.http_code != null ? ` (HTTP ${String(obj.http_code)})` : "";
+      return `${nested}${code}`;
+    }
+  }
+  return String(error);
+}
+
+function mimeForFormat(format: string | undefined) {
+  switch ((format || "").toLowerCase()) {
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "png":
+      return "image/png";
+    case "webp":
+      return "image/webp";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+/**
+ * Upload an in-memory image buffer to Cloudinary.
+ * Uses data-URI upload (more reliable than streams on some hosts).
+ */
 export async function uploadImageBuffer(
   buffer: Buffer,
   folder: CloudinaryFolder,
   options?: { publicId?: string; format?: string },
 ): Promise<UploadedMedia> {
+  if (!buffer?.length) {
+    throw new Error("Cannot upload an empty image buffer");
+  }
+
   const cloudinary = getCloudinary();
   const publicId =
     options?.publicId ?? `${FOLDER_PREFIX}/${folder}/${randomUUID()}`;
+  const format = options?.format?.toLowerCase();
+  const dataUri = `data:${mimeForFormat(format)};base64,${buffer.toString("base64")}`;
 
-  const result = await new Promise<{
-    secure_url: string;
-    public_id: string;
-  }>((resolve, reject) => {
-    cloudinary.uploader
-      .upload_stream(
-        {
-          folder: undefined,
-          public_id: publicId,
-          resource_type: "image",
-          overwrite: Boolean(options?.publicId),
-          format: options?.format,
-        },
-        (error, uploaded) => {
-          if (error || !uploaded?.secure_url || !uploaded.public_id) {
-            reject(error ?? new Error("Cloudinary upload returned no URL"));
-            return;
-          }
-          resolve({
-            secure_url: uploaded.secure_url,
-            public_id: uploaded.public_id,
-          });
-        },
-      )
-      .end(buffer);
-  });
+  try {
+    const uploaded = await cloudinary.uploader.upload(dataUri, {
+      public_id: publicId,
+      resource_type: "image",
+      overwrite: Boolean(options?.publicId),
+      unique_filename: !options?.publicId,
+      // Let Cloudinary keep/convert; avoid forcing an invalid format on raw bytes.
+      ...(format ? { format } : {}),
+    });
 
-  return { url: result.secure_url, publicId: result.public_id };
+    if (!uploaded?.secure_url || !uploaded.public_id) {
+      throw new Error("Cloudinary upload returned no URL");
+    }
+
+    logger.info("Cloudinary upload ok", {
+      folder,
+      publicId: uploaded.public_id,
+      bytes: buffer.length,
+    });
+
+    return { url: uploaded.secure_url, publicId: uploaded.public_id };
+  } catch (error) {
+    const message = cloudinaryErrorMessage(error);
+    logger.error("Cloudinary upload failed", error, {
+      folder,
+      publicId,
+      bytes: buffer.length,
+      format: format ?? null,
+      detail: message,
+    });
+    throw new Error(message);
+  }
 }
 
 /** Delete a Cloudinary asset by public_id. Soft-fails so DB updates still proceed. */
@@ -84,7 +133,7 @@ export async function destroyCloudinaryPublicId(
   } catch (error) {
     logger.warn("Cloudinary destroy failed", {
       publicId,
-      error: error instanceof Error ? error.message : String(error),
+      error: cloudinaryErrorMessage(error),
     });
   }
 }
@@ -111,7 +160,7 @@ export async function fetchRemoteImageBuffer(
   } catch (error) {
     logger.warn("Failed to fetch remote image", {
       url,
-      error: error instanceof Error ? error.message : String(error),
+      error: cloudinaryErrorMessage(error),
     });
     return null;
   }
