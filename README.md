@@ -6,7 +6,8 @@ Multi-tenant QR restaurant menu platform (SRS v1.0).
 
 ```
 client/   React + TypeScript + Vite + Tailwind
-server/   Node.js + Express + Prisma + PostgreSQL + Redis
+server/   Node.js + Express + Prisma + PostgreSQL (+ optional Redis)
+deploy/   cPanel Apache helpers and deploy notes
 ```
 
 ## Local setup
@@ -34,26 +35,38 @@ Dev seed does **not** invent passwords when those vars are unset.
 | Staff admin | From `STAFF_ADMIN_EMAIL` / `STAFF_ADMIN_PASSWORD` |
 | Tenant | Activation credentials are email-only after approval |
 
-## Production deploy (Vercel + Render)
+## Production deploy (cPanel)
 
-### API (Render)
+See **[deploy/cpanel/README.md](deploy/cpanel/README.md)** for the full runbook.
 
-1. Use `render.yaml` or create a Web Service from `server/Dockerfile`.
-2. Attach **PostgreSQL** and **Redis** (`REDIS_URL` is required in production).
-3. Configure **Cloudinary** (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`) — uploads no longer use a Render disk.
-4. Release command is baked into the Docker image: `prisma migrate deploy` then `node dist/server.js`.
-5. Required env (HTTPS origins, no localhost):
+### Quick path (same domain)
+
+1. Create a Node.js app (Node ≥ 20). Startup file: `server/app.js`.
+2. Set production env vars (`NODE_ENV=production`, `DATABASE_URL`, `JWT_SECRET`, `CLIENT_URL`, `PUBLIC_APP_URL`, `PUBLIC_API_URL`, Cloudinary, mail).
+3. For single-app hosting set `SERVE_CLIENT=1` and leave client `VITE_API_URL` empty.
+4. Without Redis on the host: `ALLOW_INMEMORY_CACHE=1` (one Node process only). Prefer Upstash/`REDIS_URL` when available.
+5. Without TLS on cPanel Postgres: `ALLOW_INSECURE_DB=1`.
+6. Build and migrate:
+
+```bash
+npm ci
+npm run build
+npm run db:migrate:deploy
+```
+
+7. Restart the Node app. Health: `/health`.
+
+Required production env (HTTPS origins, no localhost placeholders):
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | Postgres with TLS (`sslmode=require`) |
-| `REDIS_URL` | Shared cache + rate limits |
+| `DATABASE_URL` | Postgres (`sslmode=require`, or `ALLOW_INSECURE_DB=1`) |
+| `REDIS_URL` or `ALLOW_INMEMORY_CACHE=1` | Cache + rate limits |
 | `JWT_SECRET` | ≥32 chars, not a placeholder |
-| `CLIENT_URL` / `PUBLIC_APP_URL` | Vercel HTTPS origin |
-| `PUBLIC_API_URL` | This API’s HTTPS origin (legacy media URL fallback) |
-| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Image hosting |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Real mail provider (works on **paid** Render; free tier blocks SMTP) |
-| `RESEND_API_KEY` (+ optional `RESEND_FROM`) | **Recommended on Render free tier** — sends over HTTPS (ports 25/465/587 are blocked) |
+| `CLIENT_URL` / `PUBLIC_APP_URL` / `PUBLIC_API_URL` | Public HTTPS origin(s) |
+| `CLOUDINARY_*` | Image hosting |
+| `SMTP_*` | Transactional email (SMTP only) |
+| `SERVE_CLIENT` | `1` when Express should serve `client/dist` |
 
 Optional first-time admin bootstrap (never on every deploy):
 
@@ -66,12 +79,6 @@ NODE_ENV=production ALLOW_PROD_SEED=1 \
 
 Password hashes are **not** reset on re-seed unless `SEED_RESET_ADMIN_PASSWORDS=1`.
 
-### Frontend (Vercel)
-
-1. Root directory: `client` (or monorepo filter).
-2. Set `VITE_API_URL=https://YOUR-API.onrender.com` (HTTPS, no trailing slash).
-3. Production builds **fail** if `VITE_API_URL` is missing, localhost, or a placeholder.
-
 ### Production migrate (never use `db:migrate` against prod)
 
 ```bash
@@ -82,6 +89,7 @@ npm run db:migrate:deploy
 
 ```bash
 npm run build
+npm run start:cpanel
 npm run db:migrate:deploy
 npm run job:subscription-alerts -w server
 npm run job:db-backup -w server
