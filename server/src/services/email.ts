@@ -45,95 +45,22 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-function mailFromAddress() {
-  return env.resendFrom ?? env.smtp.from;
-}
-
-/**
- * Render free web services block outbound SMTP (25/465/587).
- * Resend uses HTTPS :443 and works on every tier.
- */
-async function sendViaResend(input: {
-  to: string;
-  subject: string;
-  text: string;
-  html?: string;
-}): Promise<{ ok: true; messageId: string } | { ok: false; error: unknown }> {
-  const apiKey = env.resendApiKey;
-  if (!apiKey) {
-    return { ok: false, error: new Error("RESEND_API_KEY is not configured") };
-  }
-
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: mailFromAddress(),
-        to: [input.to],
-        subject: input.subject,
-        text: input.text,
-        html: input.html ?? `<pre>${input.text}</pre>`,
-      }),
-      signal: AbortSignal.timeout(SMTP_OPERATION_TIMEOUT_MS),
-    });
-
-    const body = (await response.json().catch(() => null)) as
-      | { id?: string; message?: string; name?: string }
-      | null;
-
-    if (!response.ok) {
-      const detail =
-        body?.message ||
-        body?.name ||
-        `Resend HTTP ${response.status}`;
-      // Common free-tier / sandbox restriction with onboarding@resend.dev
-      if (/only send testing emails to your own/i.test(detail) || response.status === 403) {
-        throw new Error(
-          `${detail}. Verify a domain in Resend and set RESEND_FROM to an address on that domain.`,
-        );
-      }
-      throw new Error(detail);
-    }
-
-    return { ok: true, messageId: body?.id ?? "resend" };
-  } catch (error) {
-    return { ok: false, error };
-  }
-}
-
 export async function sendEmail(input: {
   to: string;
   subject: string;
   text: string;
   html?: string;
 }) {
-  const provider = env.resendApiKey ? "resend" : "smtp";
   logger.info("Email send started", {
     to: input.to,
     subject: input.subject,
-    provider,
+    provider: "smtp",
     smtpHost: env.smtp.host,
     smtpPort: env.smtp.port,
     smtpSecure: env.smtp.secure,
   });
 
   try {
-    if (env.resendApiKey) {
-      const mailed = await sendViaResend(input);
-      if (!mailed.ok) throw mailed.error;
-      logger.info("Email send completed", {
-        to: input.to,
-        subject: input.subject,
-        provider: "resend",
-        messageId: mailed.messageId,
-      });
-      return { ok: true as const, messageId: mailed.messageId };
-    }
-
     const info = await withTimeout(
       transporter.sendMail({
         from: env.smtp.from,
@@ -156,48 +83,18 @@ export async function sendEmail(input: {
     logger.error("Email send failed", error, {
       to: input.to,
       subject: input.subject,
-      provider,
+      provider: "smtp",
       smtpHost: env.smtp.host,
       smtpPort: env.smtp.port,
       smtpSecure: env.smtp.secure,
-      hint: env.resendApiKey
-        ? undefined
-        : "Render free tier blocks SMTP ports 25/465/587. Set RESEND_API_KEY or upgrade the Render plan.",
+      hint: "Check SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and that the host allows outbound SMTP.",
     });
     return { ok: false as const, error };
   }
 }
 
-/** Soft mail-provider probe for startup diagnostics — never throws. */
+/** Soft SMTP probe for startup diagnostics — never throws. */
 export async function verifySmtpConnection(): Promise<boolean> {
-  if (env.resendApiKey) {
-    try {
-      // Lightweight auth check — Domains list is enough to validate the key.
-      const response = await fetch("https://api.resend.com/domains", {
-        method: "GET",
-        headers: { Authorization: `Bearer ${env.resendApiKey}` },
-        signal: AbortSignal.timeout(
-          Math.min(10_000, SMTP_OPERATION_TIMEOUT_MS),
-        ),
-      });
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as
-          | { message?: string }
-          | null;
-        throw new Error(body?.message || `Resend HTTP ${response.status}`);
-      }
-      logger.info("Resend email API verified", {
-        from: mailFromAddress(),
-      });
-      return true;
-    } catch (error) {
-      logger.warn("Resend API check failed — emails may not deliver", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return false;
-    }
-  }
-
   try {
     await withTimeout(
       transporter.verify(),
@@ -217,7 +114,7 @@ export async function verifySmtpConnection(): Promise<boolean> {
       secure: env.smtp.secure,
       error: error instanceof Error ? error.message : String(error),
       hint:
-        "Render free web services block outbound SMTP (25/465/587). Set RESEND_API_KEY (HTTPS) or upgrade to a paid Render instance.",
+        "Verify SMTP credentials and that this host allows outbound SMTP (ports 25/465/587).",
     });
     return false;
   }
