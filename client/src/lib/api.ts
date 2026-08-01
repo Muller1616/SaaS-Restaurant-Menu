@@ -13,9 +13,9 @@ import {
 
 export const CSRF_HEADER = "X-CSRF-Token";
 
-/** Never leave auth UI spinners waiting forever (Render cold start + SMTP). */
+/** Never leave auth UI spinners waiting forever (slow host + SMTP). */
 export const API_TIMEOUT_MS = 30_000;
-/** Uploads (payment proof, menu images) need more headroom on cold Render + Cloudinary. */
+/** Uploads (payment proof, menu images) need more headroom for Cloudinary. */
 export const API_UPLOAD_TIMEOUT_MS = 90_000;
 
 const apiBase = getApiBaseUrl();

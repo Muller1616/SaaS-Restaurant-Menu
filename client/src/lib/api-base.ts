@@ -1,7 +1,7 @@
 /**
- * API origin for production (Vercel → Render).
- * Example: https://kitchenos-api.onrender.com
- * Leave empty in local dev so Vite proxy (`/api`) is used.
+ * API origin for production.
+ * - Leave empty for same-origin (cPanel): browser uses relative `/api/v1`.
+ * - Set to absolute HTTPS origin when the API is on another host/subdomain.
  */
 export function getApiOrigin(): string {
   const raw = String(import.meta.env.VITE_API_URL ?? "").trim().replace(/\/$/, "");
@@ -17,7 +17,7 @@ export function getApiBaseUrl(): string {
 /**
  * Resolve media paths for display.
  * Cloudinary (https) URLs pass through; legacy `/uploads/...` paths
- * are prefixed with VITE_API_URL in production.
+ * are prefixed with VITE_API_URL when the API is cross-origin.
  */
 export function assetUrl(path: string | null | undefined): string | undefined {
   if (!path) return undefined;
