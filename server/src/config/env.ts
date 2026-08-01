@@ -1,11 +1,36 @@
 import dotenv from "dotenv";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// Always load server/.env (cPanel app root may be the monorepo, not server/).
-dotenv.config({ path: path.resolve(__dirname, "../../.env") });
-dotenv.config(); // optional override from process cwd
+
+/** Candidate .env locations for local, monorepo, and cPanel layouts. */
+function loadEnvFiles() {
+  const candidates = [
+    // server/.env when running from compiled dist/config/
+    path.resolve(__dirname, "../../.env"),
+    path.resolve(__dirname, "../../.env.production"),
+    // monorepo root (one level above server/)
+    path.resolve(__dirname, "../../../.env"),
+    // process working directory
+    path.resolve(process.cwd(), ".env"),
+    path.resolve(process.cwd(), ".env.production"),
+    path.resolve(process.cwd(), "server/.env"),
+  ];
+
+  const loaded: string[] = [];
+  for (const filePath of candidates) {
+    if (!fs.existsSync(filePath)) continue;
+    const result = dotenv.config({ path: filePath });
+    if (!result.error) loaded.push(filePath);
+  }
+  // Fill any remaining gaps from cwd default lookup.
+  dotenv.config();
+  return loaded;
+}
+
+const loadedEnvFiles = loadEnvFiles();
 
 function required(name: string): string {
   const value = process.env[name];
@@ -84,23 +109,29 @@ if (
   throw new Error("JWT_SECRET must not use a development placeholder in production");
 }
 
-const clientUrl = (
-  process.env.CLIENT_URL ?? (isProduction ? "" : "http://localhost:5173")
-).replace(/\/$/, "");
-const publicAppUrl = (
-  process.env.PUBLIC_APP_URL ?? (isProduction ? "" : "http://localhost:5173")
-).replace(/\/$/, "");
+function readOriginEnv(name: "CLIENT_URL" | "PUBLIC_APP_URL"): string {
+  const raw = (process.env[name] ?? "").trim().replace(/\/$/, "");
+  if (raw) return raw;
+  if (!isProduction) {
+    return "http://localhost:5173";
+  }
+  throw new Error(
+    [
+      `${name} is required in production (HTTPS origin, no trailing slash).`,
+      `Example: ${name}=https://myqrmenu.simbatech.et`,
+      `Set it in cPanel → Setup Node.js App → Environment Variables (recommended),`,
+      `or place a .env file in the application root next to app.js.`,
+      loadedEnvFiles.length
+        ? `Loaded env files: ${loadedEnvFiles.join(", ")}`
+        : "No .env file was found next to the app — enable “Show Hidden Files” in File Manager when uploading .env.",
+      `cwd=${process.cwd()}`,
+    ].join(" "),
+  );
+}
+
+const clientUrl = readOriginEnv("CLIENT_URL");
+const publicAppUrl = readOriginEnv("PUBLIC_APP_URL");
 if (isProduction) {
-  if (!clientUrl) {
-    throw new Error(
-      "CLIENT_URL is required in production (e.g. https://myqrmenu.yourdomain.com)",
-    );
-  }
-  if (!publicAppUrl) {
-    throw new Error(
-      "PUBLIC_APP_URL is required in production (usually the same as CLIENT_URL)",
-    );
-  }
   assertHttpsOrigin("CLIENT_URL", clientUrl);
   assertHttpsOrigin("PUBLIC_APP_URL", publicAppUrl);
 }
