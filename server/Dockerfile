@@ -1,5 +1,6 @@
-# Production API image (Render / Docker hosts).
+# Optional production API image (Docker hosts).
 # Build from repo root: docker build -f server/Dockerfile .
+# Primary target is cPanel Node — see deploy/cpanel/README.md.
 
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
@@ -25,7 +26,7 @@ COPY --from=deps /app/server/node_modules ./server/node_modules
 COPY package.json package-lock.json ./
 COPY server ./server
 # npm ci used --ignore-scripts. Install the correct linux Sharp binary so
-# payment/menu/logo optimization works on Render.
+# payment/menu/logo optimization works on Linux hosts.
 RUN npm rebuild sharp --workspace=server --foreground-scripts \
   || (cd /app && npm install --no-save --foreground-scripts sharp@0.35.3)
 WORKDIR /app/server
