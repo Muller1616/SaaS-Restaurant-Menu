@@ -2,12 +2,16 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+/**
+ * Production builds:
+ * - Empty VITE_API_URL → same-origin relative `/api/v1` (cPanel single-app).
+ * - Set absolute HTTPS origin when API is on a different host/subdomain.
+ */
 function assertProductionApiUrl(apiUrl: string) {
   const url = apiUrl.trim();
   if (!url) {
-    throw new Error(
-      "VITE_API_URL is required for production builds. Set it to your public API origin (e.g. https://api.example.com).",
-    );
+    // Same-origin deploy: browser calls `/api/v1` on the SPA host.
+    return;
   }
   if (/localhost|127\.0\.0\.1/i.test(url)) {
     throw new Error(
@@ -16,7 +20,7 @@ function assertProductionApiUrl(apiUrl: string) {
   }
   if (/YOUR-API|example\.com|changeme/i.test(url)) {
     throw new Error(
-      `VITE_API_URL looks like a placeholder ("${url}"). Set the real production API origin before building.`,
+      `VITE_API_URL looks like a placeholder ("${url}"). Set the real production API origin, or leave empty for same-origin.`,
     );
   }
   try {
