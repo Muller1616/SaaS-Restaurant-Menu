@@ -17,8 +17,12 @@ export function csrfTokenHandler(req: Request, res: Response) {
   const token = issueToken();
   res.cookie(CSRF_COOKIE, token, {
     httpOnly: false,
-    // Cross-site SPA (Vercel) → API (Render) needs SameSite=None in production.
-    sameSite: env.isProduction ? "none" : "strict",
+    // Same-origin cPanel: Lax. Split SPA/API hosts: None + Secure.
+    sameSite: env.isProduction
+      ? env.sameOriginDeploy
+        ? "lax"
+        : "none"
+      : "strict",
     secure: env.isProduction,
     path: "/",
   });
