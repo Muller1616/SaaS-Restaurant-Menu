@@ -9,19 +9,37 @@ import { logger } from "./lib/logger.js";
 import { logDatabaseTarget, prisma } from "./lib/prisma.js";
 import { verifySmtpConnection } from "./services/email.js";
 
+type PassengerGlobal = {
+  configure: (options: { autoInstall: boolean }) => void;
+};
+
+function getPassenger(): PassengerGlobal | null {
+  const g = globalThis as typeof globalThis & {
+    PhusionPassenger?: PassengerGlobal;
+  };
+  return g.PhusionPassenger ?? null;
+}
+
 async function bootstrap() {
+  const passenger = getPassenger();
+  if (passenger) {
+    passenger.configure({ autoInstall: false });
+  }
+
   logDatabaseTarget();
   await prisma.$connect();
   await initCache();
-  // Non-blocking: warn early if Mailpit/SMTP is down (emails still fail soft per-send).
+  // Non-blocking: warn early if SMTP is misconfigured.
   void verifySmtpConnection();
 
   const app = createApp();
+  const listenTarget = passenger ? "passenger" : env.port;
 
-  const server = app.listen(env.port, () => {
+  const server = app.listen(listenTarget, () => {
     logger.info("KitchenOS API listening", {
-      port: env.port,
+      port: passenger ? "passenger" : env.port,
       env: env.nodeEnv,
+      serveClient: env.serveClient,
     });
     startSubscriptionAlertScheduler();
   });
