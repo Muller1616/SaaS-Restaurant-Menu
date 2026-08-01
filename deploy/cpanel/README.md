@@ -14,25 +14,22 @@ Recommended layout: **one Node.js application** serves the API and the built Rea
 
 ## Deploy steps
 
-1. Upload the repo (or clone via SSH/Git) outside `public_html`, e.g. `~/kitchenos`.
+1. Upload the **server** app (or full monorepo) to the Node application root, e.g. `~/api.myqrmenu.simbatech.et`.
 2. Create a Node.js app in cPanel:
-   - Application root: `kitchenos` (repo root) or `kitchenos/server`
-   - Application URL: your domain / subdomain
-   - Startup file: `server/app.js` (if root is the monorepo) or `app.js` (if root is `server/`)
-   - Node version: 20+
-3. In the app’s environment editor, set production variables (see root `.env.example`). Minimum:
+   - Application root: that folder
+   - Application URL: your API subdomain
+   - Startup file: `app.js`
+   - Node version: 20+ (22 preferred; 24 works)
+3. **Set environment variables in cPanel UI** (Setup Node.js App → Edit → Environment Variables).  
+   Do **not** rely only on uploading `.env` — File Manager often hides/skips dotfiles. Minimum:
 
 ```bash
 NODE_ENV=production
-DATABASE_URL=postgresql://USER:PASS@HOST:5432/DB?schema=public&sslmode=require
-# If your cPanel Postgres has no TLS:
-# ALLOW_INSECURE_DB=1
+DATABASE_URL=postgresql://USER:PASS@HOST:5432/DB?sslmode=require
 JWT_SECRET=at-least-32-random-characters-here
-CLIENT_URL=https://your-domain.com
-PUBLIC_APP_URL=https://your-domain.com
-PUBLIC_API_URL=https://your-domain.com
-SERVE_CLIENT=1
-# CLIENT_DIST_PATH=/home/USER/kitchenos/client/dist
+CLIENT_URL=https://myqrmenu.simbatech.et
+PUBLIC_APP_URL=https://myqrmenu.simbatech.et
+PUBLIC_API_URL=https://api.myqrmenu.simbatech.et
 CLOUDINARY_CLOUD_NAME=...
 CLOUDINARY_API_KEY=...
 CLOUDINARY_API_SECRET=...
@@ -43,16 +40,21 @@ SMTP_USER=noreply@your-domain.com
 SMTP_PASS=...
 SMTP_FROM=KitchenOS <noreply@your-domain.com>
 ALLOW_INMEMORY_CACHE=1
-# Or REDIS_URL=redis://...
 ENABLE_LOCAL_DB_BACKUP=false
 ```
 
-4. Build and migrate (SSH or cPanel terminal), from the **monorepo root**:
+Values must be **https://** (not http://localhost). No trailing slash.
+
+4. In SSH / Terminal, enter the app virtualenv, then generate Prisma + migrate:
 
 ```bash
-npm ci
-npm run build
-cd server && npx prisma migrate deploy && cd ..
+source ~/nodevenv/api.myqrmenu.simbatech.et/24/bin/activate
+cd ~/api.myqrmenu.simbatech.et
+npm install
+npx prisma generate
+npx prisma migrate deploy
+# If you deploy the monorepo server package:
+# npm run build   # or upload a freshly built dist/ from your laptop
 ```
 
 5. Restart the Node.js app in cPanel.
