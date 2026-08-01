@@ -140,7 +140,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
     throw new AppError(
       400,
       tenant.status === "ACTIVE" && !tenant.activatedAt
-        ? "This registration was already approved. Use Resend activation email if the owner did not receive credentials."
+        ? "This registration was already approved. Use ùResend activation emailù if the owner did not receive credentials."
         : "Registration is not pending approval",
     );
   }
@@ -269,7 +269,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
       return { updatedTenant, branch };
     },
     {
-      // Interactive tx defaults to 5s ‚Äî too low for remote DBs / cold pools.
+      // Interactive tx defaults to 5s ù too low for remote DBs / cold pools.
       maxWait: 10_000,
       timeout: 20_000,
     },
@@ -351,7 +351,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
     const notifyResult = await notifyTenant({
       tenantId: tenant.id,
       type: "SYSTEM",
-      title: "Account approved ó activate to sign in",
+      title: "Account approved ù activate to sign in",
       message: `Your KitchenOS account was approved on the ${tenant.selectedPlan.name} plan. Open the activation link in your email to set your password.`,
       forceEmail: true,
       email: {
@@ -382,9 +382,9 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
       emailDelivered: notifyResult.emailed,
     });
 
-    // Keep the approval even when email fails (common with Resend sandbox /
-    // unverified domain). Surface one-time credentials to the admin so they
-    // can share them manually; tenant can also use Resend activation later.
+    // Keep the approval even when email fails (SMTP misconfigured, etc.).
+    // Surface one-time credentials to the admin so they can share them
+    // manually; tenant can also use ìResend activationî later.
     if (!notifyResult.emailed) {
       logger.warn("Approval kept active but activation email failed", {
         tenantId: tenant.id,
@@ -407,7 +407,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
         temporaryPassword: plainPassword,
         emailDelivered: false as const,
         message:
-          "Restaurant approved, but the activation email could not be sent. Copy the activation link and temporary password below and send them to the owner. Fix RESEND_FROM / verified domain so future emails work.",
+          "Restaurant approved, but the activation email could not be sent. Copy the activation link and temporary password below and send them to the owner. Fix SMTP settings so future emails work.",
         publicMenuUrl: qr.menuUrl,
       };
     }
@@ -434,7 +434,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
   } catch (error) {
     if (error instanceof AppError) throw error;
 
-    logger.error("Registration approval failed after commit ó rolling back", error, {
+    logger.error("Registration approval failed after commit ù rolling back", error, {
       tenantId: tenant.id,
       branchId: result.branch.id,
     });
@@ -445,7 +445,7 @@ async function approveSingleRegistration(tenantId: string, adminId: string) {
         branchId: result.branch.id,
         pendingPaymentId: pendingPayment?.id ?? null,
         adminId,
-        reason: "Approval rolled back ó post-approval step failed",
+        reason: "Approval rolled back ù post-approval step failed",
       });
     } catch (rollbackError) {
       logger.error("Approval rollback failed", rollbackError, {
