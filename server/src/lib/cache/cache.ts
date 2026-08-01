@@ -33,18 +33,22 @@ function requiresDistributedCache() {
 }
 
 /**
- * Redis is required in production (see env.ts). Locally, omitting REDIS_URL
- * uses process-local memory suitable for a single API process.
+ * Redis is recommended in production. Omitting REDIS_URL uses process-local
+ * memory (dev, or production with ALLOW_INMEMORY_CACHE=1 on single-process hosts).
  */
 export async function initCache() {
   const url = env.redisUrl;
   if (!url) {
-    if (env.isProduction) {
+    if (env.isProduction && !env.allowInMemoryCache) {
       throw new Error("REDIS_URL is required in production");
     }
     stats.backend = "memory";
     stats.connected = true;
-    logger.info("Cache: in-memory fallback (set REDIS_URL for distributed cache)");
+    logger.info(
+      env.isProduction
+        ? "Cache: in-memory fallback (ALLOW_INMEMORY_CACHE=1 — single-process only)"
+        : "Cache: in-memory fallback (set REDIS_URL for distributed cache)",
+    );
     return;
   }
 
@@ -82,7 +86,7 @@ export async function initCache() {
     redis = null;
     redisReady = false;
     stats.connected = false;
-    if (env.isProduction) {
+    if (env.isProduction && !env.allowInMemoryCache) {
       throw new Error(
         `Redis unavailable in production: ${
           error instanceof Error ? error.message : String(error)

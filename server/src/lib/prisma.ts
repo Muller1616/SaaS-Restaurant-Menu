@@ -31,10 +31,14 @@ export function logDatabaseTarget() {
     });
     if (
       process.env.NODE_ENV === "development" &&
-      parsed.hostname.includes("render.com")
+      !(
+        parsed.hostname === "localhost" ||
+        parsed.hostname === "127.0.0.1" ||
+        parsed.hostname === "::1"
+      )
     ) {
       logger.warn(
-        "DATABASE_URL points at a remote Render Postgres from a local process — high latency commonly causes 500s on dashboard stats and approval transactions. Prefer docker compose Postgres for local development.",
+        "DATABASE_URL points at a remote Postgres from a local process — high latency can cause timeouts on dashboard/approval. Prefer docker compose Postgres for local development.",
       );
     }
   } catch {
