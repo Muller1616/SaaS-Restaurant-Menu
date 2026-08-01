@@ -1,8 +1,11 @@
-import "dotenv/config";
+import dotenv from "dotenv";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Always load server/.env (cPanel app root may be the monorepo, not server/).
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+dotenv.config(); // optional override from process cwd
 
 function required(name: string): string {
   const value = process.env[name];
@@ -47,6 +50,12 @@ function assertProductionDatabaseUrl(url: string) {
       "DATABASE_URL must not point at localhost in production",
     );
   }
+  const allowInsecureDb =
+    (process.env.ALLOW_INSECURE_DB ?? "").trim().toLowerCase() === "1" ||
+    (process.env.ALLOW_INSECURE_DB ?? "").trim().toLowerCase() === "true";
+  if (allowInsecureDb) {
+    return;
+  }
   const sslMode = parsed.searchParams.get("sslmode")?.toLowerCase();
   const hasSslFlag =
     sslMode === "require" ||
@@ -56,7 +65,7 @@ function assertProductionDatabaseUrl(url: string) {
     url.includes("ssl=true");
   if (!hasSslFlag) {
     throw new Error(
-      "DATABASE_URL must enable TLS in production (e.g. sslmode=require)",
+      "DATABASE_URL must enable TLS in production (e.g. sslmode=require). Set ALLOW_INSECURE_DB=1 only for private cPanel Postgres without TLS.",
     );
   }
 }
@@ -106,6 +115,7 @@ const smtpTimeoutMs = (() => {
   if (!Number.isFinite(n) || n < 3_000) return 20_000;
   return Math.min(Math.floor(n), 60_000);
 })();
+
 if (isProduction) {
   if (smtpHost === "localhost" || smtpHost === "127.0.0.1") {
     throw new Error("SMTP_HOST must be a real mail provider in production");
@@ -118,9 +128,7 @@ if (isProduction) {
     smtpFrom.includes("kitchenos.local") ||
     smtpFrom.includes("example.com")
   ) {
-    throw new Error(
-      "SMTP_FROM must be a real sender address in production",
-    );
+    throw new Error("SMTP_FROM must be a real sender address in production");
   }
 }
 
@@ -151,6 +159,34 @@ if (isProduction) {
   }
 }
 
+/** Same-origin deploy when API and SPA share one HTTPS origin (typical cPanel). */
+const sameOriginDeploy = (() => {
+  if (!publicApiUrl) return false;
+  try {
+    return new URL(clientUrl).origin === new URL(publicApiUrl).origin;
+  } catch {
+    return false;
+  }
+})();
+
+const serveClient = (() => {
+  const raw = (process.env.SERVE_CLIENT ?? "").trim().toLowerCase();
+  if (raw === "true" || raw === "1") return true;
+  if (raw === "false" || raw === "0") return false;
+  // Default on in production when SPA and API share the same origin.
+  return isProduction && sameOriginDeploy;
+})();
+
+const clientDistPath = path.resolve(
+  process.env.CLIENT_DIST_PATH?.trim() ||
+    path.join(__dirname, "../../../client/dist"),
+);
+
+const allowInMemoryCache = (() => {
+  const raw = (process.env.ALLOW_INMEMORY_CACHE ?? "").trim().toLowerCase();
+  return raw === "1" || raw === "true";
+})();
+
 export const env = {
   nodeEnv,
   isProduction,
@@ -162,6 +198,10 @@ export const env = {
   clientUrl,
   publicAppUrl,
   publicApiUrl,
+  sameOriginDeploy,
+  /** Serve Vite `client/dist` from Express (cPanel single-app). */
+  serveClient,
+  clientDistPath,
   /** Hours until an approval activation link expires. */
   activationTokenHours: Number(process.env.ACTIVATION_TOKEN_HOURS ?? 24),
   /**
@@ -192,20 +232,7 @@ export const env = {
     timeoutMs: smtpTimeoutMs,
   },
   /**
-   * Resend HTTPS API — preferred on Render free tier (SMTP ports 25/465/587 are blocked).
-   * When set, sendEmail uses https://api.resend.com instead of SMTP.
-   */
-  resendApiKey: (() => {
-    const key = (process.env.RESEND_API_KEY ?? "").trim();
-    return key || null;
-  })(),
-  /** Optional override for Resend "from"; defaults to SMTP_FROM. */
-  resendFrom: (() => {
-    const from = (process.env.RESEND_FROM ?? "").trim();
-    return from || null;
-  })(),
-  /**
-   * When false, the scheduler skips local pg_dump backups (Neon/Render have no Docker Postgres).
+   * When false, the scheduler skips local pg_dump backups.
    * Default: enabled in development, disabled in production.
    */
   enableLocalDbBackup: (() => {
@@ -241,14 +268,17 @@ export const env = {
   })(),
   /**
    * Redis URL for distributed response caching + rate limits.
-   * Required in production (multi-instance safe).
-   * Optional locally — falls back to process memory.
+   * Recommended in production. Optional with ALLOW_INMEMORY_CACHE=1
+   * for single-process cPanel hosts (falls back to process memory).
    */
   redisUrl: (() => {
     const url = (process.env.REDIS_URL ?? "").trim() || null;
-    if (isProduction && !url) {
-      throw new Error("REDIS_URL is required in production for shared cache");
+    if (isProduction && !url && !allowInMemoryCache) {
+      throw new Error(
+        "REDIS_URL is required in production (or set ALLOW_INMEMORY_CACHE=1 for single-process cPanel)",
+      );
     }
     return url;
   })(),
+  allowInMemoryCache,
 } as const;

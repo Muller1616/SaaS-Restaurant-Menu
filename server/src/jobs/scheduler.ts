@@ -40,7 +40,7 @@ export function startSubscriptionAlertScheduler() {
             pruned: backup.pruned,
           });
         } catch (backupError) {
-          // Neon/Render has no local Docker Postgres — don't fail alert jobs.
+          // Managed/remote Postgres often has no local Docker pg_dump — don't fail alert jobs.
           logger.warn("Automatic database backup skipped", {
             error:
               backupError instanceof Error
