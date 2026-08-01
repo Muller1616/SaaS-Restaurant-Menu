@@ -84,14 +84,23 @@ if (
   throw new Error("JWT_SECRET must not use a development placeholder in production");
 }
 
-const clientUrl = (process.env.CLIENT_URL ?? "http://localhost:5173").replace(
-  /\/$/,
-  "",
-);
+const clientUrl = (
+  process.env.CLIENT_URL ?? (isProduction ? "" : "http://localhost:5173")
+).replace(/\/$/, "");
 const publicAppUrl = (
-  process.env.PUBLIC_APP_URL ?? "http://localhost:5173"
+  process.env.PUBLIC_APP_URL ?? (isProduction ? "" : "http://localhost:5173")
 ).replace(/\/$/, "");
 if (isProduction) {
+  if (!clientUrl) {
+    throw new Error(
+      "CLIENT_URL is required in production (e.g. https://myqrmenu.yourdomain.com)",
+    );
+  }
+  if (!publicAppUrl) {
+    throw new Error(
+      "PUBLIC_APP_URL is required in production (usually the same as CLIENT_URL)",
+    );
+  }
   assertHttpsOrigin("CLIENT_URL", clientUrl);
   assertHttpsOrigin("PUBLIC_APP_URL", publicAppUrl);
 }
